@@ -1,0 +1,171 @@
+ :root {
+  color-scheme: dark;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.hero,
+.card {
+  background: #111827;
+  border: 1px solid #334155;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.success {
+  border-color: #22c55e;
+}
+
+.tab-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tab-button,
+button {
+  border: 0;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.tab-button.active {
+  background: #1d4ed8;
+}
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+label,
+.poster-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid #475569;
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.hint,
+.muted {
+  color: #94a3b8;
+}
+
+.small {
+  font-size: 0.9rem;
+}
+
+.output-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.poster-editor {
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 16px;
+  background: #0b1220;
+}
+
+.poster-editor-header h3 {
+  margin: 0 0 8px;
+}
+
+.poster-editor-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.poster-editor-preview-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.poster-canvas {
+  width: 300px;
+  height: 450px;
+  border-radius: 12px;
+  border: 1px solid #475569;
+  cursor: grab;
+  background: #020617;
+}
+
+.poster-canvas:active {
+  cursor: grabbing;
+}
+
+.poster-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.poster-local-file-row {
+  display: none;
+}
+
+@media (max-width: 860px) {
+  .form-grid,
+  .poster-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .poster-editor-preview-wrap {
+    justify-content: flex-start;
+  }
+}

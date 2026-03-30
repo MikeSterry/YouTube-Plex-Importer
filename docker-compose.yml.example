@@ -1,0 +1,47 @@
+services:
+  app:
+    build: .
+    container_name: youtube-plex-importer
+    env_file:
+      - properties
+    ports:
+      - "5001:5000"
+    volumes:
+      - ./inprogress:/inprogress
+      - ./output:/output
+    depends_on:
+      - redis
+    command: >
+      sh -c "gunicorn
+      --bind 0.0.0.0:5000
+      --workers 2
+      --threads 2
+      --timeout 7200
+      run:app"
+    healthcheck:
+      test: ["CMD", "python", "scripts/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: youtube-plex-importer-worker
+    env_file:
+      - properties
+    volumes:
+      - ./inprogress:/inprogress
+      - ./output:/output
+    depends_on:
+      - redis
+    command: ["python", "worker.py"]
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: youtube-plex-importer-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
