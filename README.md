@@ -1,4 +1,4 @@
-# YouTube MKV Builder
+# YouTube Plex Importer
 
 A Docker-friendly Flask app with a UI and API that can:
 - download a YouTube video as an MKV using the best available video and audio
@@ -6,6 +6,7 @@ A Docker-friendly Flask app with a UI and API that can:
 - optionally download and process poster/background artwork
 - queue long-running jobs through Redis + RQ
 - edit poster framing interactively with pan, zoom, cover, and contain modes
+- output can be linked to a directory Plex uses as a library to automatically import videos
 
 ## Features
 
@@ -72,7 +73,7 @@ Key settings include:
 docker compose up --build
 ```
 
-The app container exposes the UI and API on port `8080` by default.
+The app container exposes the UI and API on port `5001` by default.
 
 ## UI workflow
 
