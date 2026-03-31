@@ -62,15 +62,17 @@ class YoutubeClient:
         with YoutubeDL(options) as ydl:
             ydl.download([youtube_url])
 
+
     def _build_common_options(self) -> dict:
         """Build yt-dlp options shared by metadata and download operations."""
         return {
             "quiet": True,
             "noprogress": True,
             "skip_download": False,
-            "js_runtimes": self._settings.ytdlp_js_runtimes,
-            "remote_components": self._settings.ytdlp_remote_components,
+            "js_runtimes": self._settings.ytdlp_js_runtimes_dict,
+            "remote_components": self._settings.ytdlp_remote_components_set,
         }
+
 
     def _find_video_path(self, work_dir: Path, output_name: str) -> Path:
         """Locate the final MKV after yt-dlp completes."""
