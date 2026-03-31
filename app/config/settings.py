@@ -21,10 +21,13 @@ class Settings:
     app_file_mode: int
     app_dir_mode: int
     ytdlp_format: str
+    ytdlp_js_runtimes: str
+    ytdlp_remote_components: str
     ffmpeg_bin: str
     ffprobe_bin: str
     mkvmerge_bin: str
     max_content_length: int
+    log_level: str
 
     @staticmethod
     def load() -> "Settings":
@@ -42,8 +45,22 @@ class Settings:
             app_file_mode=int(os.getenv("APP_FILE_MODE", "0o775"), 8),
             app_dir_mode=int(os.getenv("APP_DIR_MODE", "0o775"), 8),
             ytdlp_format=os.getenv("YTDLP_FORMAT", "bv*+ba/b"),
+            ytdlp_js_runtimes=os.getenv("YTDLP_JS_RUNTIMES", "deno"),
+            ytdlp_remote_components=os.getenv("YTDLP_REMOTE_COMPONENTS", "ejs:github"),
             ffmpeg_bin=os.getenv("FFMPEG_BIN", "ffmpeg"),
-            mkvmerge_bin=os.getenv("MKVMERGE_BIN", "mkvmerge"),
             ffprobe_bin=os.getenv("FFPROBE_BIN", "ffprobe"),
+            mkvmerge_bin=os.getenv("MKVMERGE_BIN", "mkvmerge"),
             max_content_length=int(os.getenv("MAX_CONTENT_LENGTH", str(16 * 1024 * 1024))),
+            log_level=os.getenv("LOG_LEVEL", "INFO"),
         )
+
+    @property
+    def ytdlp_js_runtimes_dict(self) -> dict[str, dict]:
+        """Convert a comma-separated runtime list into yt-dlp API format."""
+        runtimes = [item.strip() for item in self.ytdlp_js_runtimes.split(",") if item.strip()]
+        return {runtime: {} for runtime in runtimes} or {"deno": {}}
+
+    @property
+    def ytdlp_remote_components_set(self) -> set[str]:
+        """Convert a comma-separated remote component list into a set."""
+        return {item.strip() for item in self.ytdlp_remote_components.split(",") if item.strip()}
