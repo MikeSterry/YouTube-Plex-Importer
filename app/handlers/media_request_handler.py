@@ -31,7 +31,8 @@ class MediaRequestHandler:
 
     def process_create(self, request: CreateMediaRequest) -> dict:
         """Execute the create workflow synchronously for the worker."""
-        download_result, work_dir, final_dir = self._media_service.download_youtube_video(request.youtube_url, request.output_name)
+        job_id = self._job_service.enqueue_create(asdict(request)).job_id
+        download_result, work_dir, final_dir = self._media_service.download_youtube_video(request.youtube_url, request.output_name, job_id)
         final_video = self._media_service.finalize_video(download_result.video_path, final_dir)
         if request.chapters_text:
             final_video = self._apply_chapters(request.chapters_text, final_dir, final_video)

@@ -1,9 +1,9 @@
 """YouTube download integration using yt-dlp."""
 
+import time
+from yt_dlp.utils import DownloadError
 from pathlib import Path
-
 from yt_dlp import YoutubeDL
-
 from app.models.domain import DownloadResult
 from app.utils.file_utils import FileNameUtils
 from app.utils.logger_factory import get_logger
@@ -55,6 +55,7 @@ class YoutubeClient:
         with YoutubeDL(self._build_common_options()) as ydl:
             return ydl.extract_info(youtube_url, download=False)
 
+
     def _download_media(self, youtube_url: str, output_template: str) -> None:
         """Download the actual media to disk."""
         options = self._build_common_options()
@@ -66,8 +67,16 @@ class YoutubeClient:
             }
         )
 
-        with YoutubeDL(options) as ydl:
-            ydl.download([youtube_url])
+        attempts = 3
+        for attempt in range(1, attempts + 1):
+            try:
+                with YoutubeDL(options) as ydl:
+                    ydl.download([youtube_url])
+                return
+            except DownloadError:
+                if attempt >= attempts:
+                    raise
+                time.sleep(min(attempt * 5, 15))
 
 
     def _build_common_options(self) -> dict:
@@ -78,6 +87,19 @@ class YoutubeClient:
             "skip_download": False,
             "js_runtimes": self._settings.ytdlp_js_runtimes_dict,
             "remote_components": self._settings.ytdlp_remote_components_set,
+            "socket_timeout": self._settings.ytdlp_socket_timeout,
+            "retries": self._settings.ytdlp_retries,
+            "fragment_retries": self._settings.ytdlp_fragment_retries,
+            "file_access_retries": self._settings.ytdlp_file_access_retries,
+            "extractor_retries": self._settings.ytdlp_extractor_retries,
+            "retry_sleep_functions": {
+                "http": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_http),
+                "fragment": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_fragment),
+                "file_access": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_file_access),
+                "extractor": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_extractor),
+            },
+            "http_chunk_size": self._settings.ytdlp_http_chunk_size,
+            "throttledratelimit": self._parse_rate(self._settings.ytdlp_throttled_rate),
         }
 
 
@@ -88,3 +110,63 @@ class YoutubeClient:
             return candidate
 
         raise FileNotFoundError("Unable to locate downloaded MKV file.")
+
+
+    def _build_retry_sleep(self, expr: str):
+        """Build a yt-dlp retry sleep function from a simple config string."""
+        if not expr:
+            return None
+
+        if expr.isdigit():
+            seconds = float(expr)
+            return lambda *_args, **_kwargs: seconds
+
+        if expr.startswith("linear="):
+            return self._build_linear_sleep(expr.removeprefix("linear="))
+
+        if expr.startswith("exp="):
+            return self._build_exp_sleep(expr.removeprefix("exp="))
+
+        return None
+
+
+    def _build_linear_sleep(self, payload: str):
+        """Build a linear backoff retry sleep function."""
+        parts = payload.split(":")
+        start = float(parts[0]) if len(parts) > 0 and parts[0] else 1.0
+        end = float(parts[1]) if len(parts) > 1 and parts[1] else start
+        step = float(parts[2]) if len(parts) > 2 and parts[2] else 1.0
+
+        def linear_sleep(attempt, *_args, **_kwargs):
+            value = start + max(attempt - 1, 0) * step
+            return min(value, end)
+
+        return linear_sleep
+
+
+    def _build_exp_sleep(self, payload: str):
+        """Build an exponential backoff retry sleep function."""
+        parts = payload.split(":")
+        start = float(parts[0]) if len(parts) > 0 and parts[0] else 1.0
+        end = float(parts[1]) if len(parts) > 1 and parts[1] else start
+        base = float(parts[2]) if len(parts) > 2 and parts[2] else 2.0
+
+        def exp_sleep(attempt, *_args, **_kwargs):
+            value = start * (base ** max(attempt - 1, 0))
+            return min(value, end)
+
+        return exp_sleep
+
+
+    def _parse_rate(self, value: str) -> int | None:
+        """Parse a human-readable byte rate like 100K or 4M."""
+        if not value:
+            return None
+
+        cleaned = value.strip().upper()
+        suffixes = {"K": 1024, "M": 1024 * 1024, "G": 1024 * 1024 * 1024}
+
+        if cleaned[-1] in suffixes:
+            return int(float(cleaned[:-1]) * suffixes[cleaned[-1]])
+
+        return int(float(cleaned))

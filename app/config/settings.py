@@ -28,6 +28,17 @@ class Settings:
     mkvmerge_bin: str
     max_content_length: int
     log_level: str
+    ytdlp_socket_timeout: int
+    ytdlp_retries: int
+    ytdlp_fragment_retries: int
+    ytdlp_file_access_retries: int
+    ytdlp_extractor_retries: int
+    ytdlp_retry_sleep_http: str
+    ytdlp_retry_sleep_fragment: str
+    ytdlp_retry_sleep_file_access: str
+    ytdlp_retry_sleep_extractor: str
+    ytdlp_http_chunk_size: int
+    ytdlp_throttled_rate: str
 
     @staticmethod
     def load() -> "Settings":
@@ -52,6 +63,17 @@ class Settings:
             mkvmerge_bin=os.getenv("MKVMERGE_BIN", "mkvmerge"),
             max_content_length=int(os.getenv("MAX_CONTENT_LENGTH", str(16 * 1024 * 1024))),
             log_level=os.getenv("LOG_LEVEL", "INFO"),
+            ytdlp_socket_timeout=int(os.getenv("YTDLP_SOCKET_TIMEOUT", "30")),
+            ytdlp_retries=int(os.getenv("YTDLP_RETRIES", "25")),
+            ytdlp_fragment_retries=int(os.getenv("YTDLP_FRAGMENT_RETRIES", "25")),
+            ytdlp_file_access_retries=int(os.getenv("YTDLP_FILE_ACCESS_RETRIES", "5")),
+            ytdlp_extractor_retries=int(os.getenv("YTDLP_EXTRACTOR_RETRIES", "5")),
+            ytdlp_retry_sleep_http=os.getenv("YTDLP_RETRY_SLEEP_HTTP", "exp=1:20"),
+            ytdlp_retry_sleep_fragment=os.getenv("YTDLP_RETRY_SLEEP_FRAGMENT", "exp=1:20"),
+            ytdlp_retry_sleep_file_access=os.getenv("YTDLP_RETRY_SLEEP_FILE_ACCESS", "linear=1:5:1"),
+            ytdlp_retry_sleep_extractor=os.getenv("YTDLP_RETRY_SLEEP_EXTRACTOR", "linear=1:10:2"),
+            ytdlp_http_chunk_size=int(os.getenv("YTDLP_HTTP_CHUNK_SIZE", "10485760")),
+            ytdlp_throttled_rate=os.getenv("YTDLP_THROTTLED_RATE", "100K"),
         )
 
     @property

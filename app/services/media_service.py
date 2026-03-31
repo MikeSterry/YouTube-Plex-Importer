@@ -16,9 +16,9 @@ class MediaService:
         self._output_repository = output_repository
         self._youtube_client = youtube_client
 
-    def download_youtube_video(self, youtube_url: str, desired_output_name: str | None = None) -> tuple[DownloadResult, Path, Path]:
+    def download_youtube_video(self, youtube_url: str, desired_output_name: str, job_id: str | None = None) -> tuple[DownloadResult, Path, Path]:
         """Download a YouTube video into a work directory and prepare the output folder."""
-        work_dir = self._output_repository.create_work_dir(f"job-{uuid4().hex}")
+        work_dir = self._output_repository.create_work_dir(f"job-{job_id}")
         download_result = self._youtube_client.download_best_mkv(youtube_url, work_dir, desired_output_name)
         final_dir = self._output_repository.create_output_dir(download_result.output_name)
         return download_result, work_dir, final_dir
