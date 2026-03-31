@@ -21,6 +21,8 @@ class Settings:
     app_file_mode: int
     app_dir_mode: int
     ytdlp_format: str
+    ytdlp_js_runtimes: str
+    ytdlp_remote_components: str
     ffmpeg_bin: str
     ffprobe_bin: str
     mkvmerge_bin: str
@@ -42,6 +44,8 @@ class Settings:
             app_file_mode=int(os.getenv("APP_FILE_MODE", "0o775"), 8),
             app_dir_mode=int(os.getenv("APP_DIR_MODE", "0o775"), 8),
             ytdlp_format=os.getenv("YTDLP_FORMAT", "bv*+ba/b"),
+            ytdlp_js_runtimes=os.getenv("YTDLP_JS_RUNTIMES", "deno"),
+            ytdlp_remote_components=os.getenv("YTDLP_REMOTE_COMPONENTS", "ejs:github"),
             ffmpeg_bin=os.getenv("FFMPEG_BIN", "ffmpeg"),
             mkvmerge_bin=os.getenv("MKVMERGE_BIN", "mkvmerge"),
             ffprobe_bin=os.getenv("FFPROBE_BIN", "ffprobe"),

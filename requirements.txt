@@ -3,7 +3,7 @@ Werkzeug==3.0.3
 gunicorn==22.0.0
 redis==5.0.7
 rq==1.16.2
-yt-dlp==2026.03.17
+yt-dlp[default]==2026.03.17
 requests==2.32.3
 Pillow==10.4.0
 python-dotenv==1.0.1
