@@ -24,6 +24,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   worker:
@@ -37,11 +42,14 @@ services:
     depends_on:
       - redis
     command: ["python", "worker.py"]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: youtube-plex-importer-redis
-    ports:
-      - "6379:6379"
     restart: unless-stopped

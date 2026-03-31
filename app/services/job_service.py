@@ -13,7 +13,7 @@ class JobService:
     def enqueue_create(self, request_payload: dict) -> JobResponse:
         """Queue a create workflow."""
         job = self._job_repository.enqueue("app.handlers.background_jobs.process_create_request", request_payload=request_payload)
-        return JobResponse(job_id=job.id, status=job.get_status())
+        return JobResponse(job_id=job.id, status=job.get_status(), output_name=job.meta.get("output_name"))
 
     def enqueue_update(self, request_payload: dict) -> JobResponse:
         """Queue an update workflow."""
