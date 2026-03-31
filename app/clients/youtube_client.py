@@ -6,6 +6,10 @@ from yt_dlp import YoutubeDL
 
 from app.models.domain import DownloadResult
 from app.utils.file_utils import FileNameUtils
+from app.utils.logger_factory import get_logger
+
+
+LOGGER = get_logger(__name__)
 
 
 class YoutubeClient:
@@ -23,11 +27,14 @@ class YoutubeClient:
         desired_output_name: str | None = None,
     ) -> DownloadResult:
         """Download the highest quality video/audio and mux it into MKV."""
+        LOGGER.info("Extracting YouTube metadata.")
         info = self._extract_info(youtube_url)
         output_name = self._build_output_name(info, desired_output_name)
         target_template = str(work_dir / f"{output_name}.%(ext)s")
+        LOGGER.info("Downloading YouTube media.", extra={"output_name": output_name})
         self._download_media(youtube_url, target_template)
         video_path = self._find_video_path(work_dir, output_name)
+        LOGGER.info("Located final MKV.", extra={"video_path": str(video_path)})
         return DownloadResult(
             title=info.get("title", output_name),
             output_name=output_name,
