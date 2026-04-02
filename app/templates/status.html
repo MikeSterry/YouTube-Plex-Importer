@@ -39,21 +39,13 @@
 
     <section class="status-filters">
       <a class="filter-chip {{ 'is-active' if filter_name == 'active' else '' }}"
-         href="{{ url_for('ui.status_page', filter='active') }}">
-        Processing
-      </a>
+         href="{{ url_for('ui.status_page', filter='active') }}">Processing</a>
       <a class="filter-chip {{ 'is-active' if filter_name == 'all' else '' }}"
-         href="{{ url_for('ui.status_page', filter='all') }}">
-        All
-      </a>
+         href="{{ url_for('ui.status_page', filter='all') }}">All</a>
       <a class="filter-chip {{ 'is-active' if filter_name == 'completed' else '' }}"
-         href="{{ url_for('ui.status_page', filter='completed') }}">
-        Completed
-      </a>
+         href="{{ url_for('ui.status_page', filter='completed') }}">Completed</a>
       <a class="filter-chip {{ 'is-active' if filter_name == 'issues' else '' }}"
-         href="{{ url_for('ui.status_page', filter='issues') }}">
-        Issues
-      </a>
+         href="{{ url_for('ui.status_page', filter='issues') }}">Issues</a>
     </section>
 
     <main id="status-groups-container">
