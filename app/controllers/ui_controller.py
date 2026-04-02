@@ -7,13 +7,13 @@ from app.models.requests import CreateMediaRequest, UpdateMediaRequest
 
 ui_blueprint = Blueprint("ui", __name__)
 
+INDEX_HTML = "index.html"
+
 
 @ui_blueprint.get("/")
 def index():
     """Render the main UI with create and update tabs."""
-    container = current_app.config["APP_CONTAINER"]
-    outputs = container.output_repository.list_outputs()
-    return render_template("index.html", outputs=outputs, result=None)
+    return render_template(INDEX_HTML, result=None)
 
 
 @ui_blueprint.post("/create")
@@ -31,8 +31,7 @@ def create_form():
         return redirect(url_for("ui.index"))
     container = current_app.config["APP_CONTAINER"]
     result = container.request_handler.submit_create(model)
-    outputs = container.output_repository.list_outputs()
-    return render_template("index.html", outputs=outputs, result=result.to_dict())
+    return render_template(INDEX_HTML, result=result.to_dict())
 
 
 @ui_blueprint.post("/update")
@@ -50,8 +49,7 @@ def update_form():
         return redirect(url_for("ui.index"))
     container = current_app.config["APP_CONTAINER"]
     result = container.request_handler.submit_update(model)
-    outputs = container.output_repository.list_outputs()
-    return render_template("index.html", outputs=outputs, result=result.to_dict())
+    return render_template(INDEX_HTML, result=result.to_dict())
 
 
 def _poster_crop_settings(form_data):
