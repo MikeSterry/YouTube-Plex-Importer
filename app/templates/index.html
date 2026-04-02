@@ -93,22 +93,6 @@
             </form>
         </div>
     </section>
-
-    <section class="card">
-        <h2>Existing outputs</h2>
-        {% if outputs %}
-        <ul class="output-list">
-            {% for output in outputs %}
-            <li>
-                <strong>{{ output.name }}</strong>
-                <div class="muted">{{ output.files | join(', ') if output.files else 'No files yet' }}</div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="muted">No output folders yet.</p>
-        {% endif %}
-    </section>
 </div>
 <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
