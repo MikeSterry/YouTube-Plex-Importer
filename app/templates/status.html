@@ -4,73 +4,87 @@
   <meta charset="utf-8">
   <title>Status - YouTube Plex Importer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="{{ url_for('static', filename='status.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/status.css') }}">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
+        <h1>Status</h1>
+        <p class="page-subtitle">Live background job dashboard</p>
+      </div>
+
+      <nav class="page-nav">
+        <a class="nav-button" href="{{ url_for('ui.index') }}">Home</a>
+        <a class="nav-button is-active" href="{{ url_for('ui.status_page') }}">Status</a>
+      </nav>
+    </header>
+
+    <section class="summary-cards">
+      <article class="summary-card">
+        <span class="summary-label">Processing</span>
+        <strong>{{ active_count }}</strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">Completed</span>
+        <strong>{{ completed_count }}</strong>
+      </article>
+
+      <article class="summary-card">
+        <span class="summary-label">Issues</span>
+        <strong>{{ issue_count }}</strong>
+      </article>
+    </section>
+
+    <section class="status-filters">
+      <a class="filter-chip {{ 'is-active' if filter_name == 'active' else '' }}"
+         href="{{ url_for('ui.status_page', filter='active') }}">
+        Processing
+      </a>
+      <a class="filter-chip {{ 'is-active' if filter_name == 'all' else '' }}"
+         href="{{ url_for('ui.status_page', filter='all') }}">
+        All
+      </a>
+      <a class="filter-chip {{ 'is-active' if filter_name == 'completed' else '' }}"
+         href="{{ url_for('ui.status_page', filter='completed') }}">
+        Completed
+      </a>
+      <a class="filter-chip {{ 'is-active' if filter_name == 'issues' else '' }}"
+         href="{{ url_for('ui.status_page', filter='issues') }}">
+        Issues
+      </a>
+    </section>
+
+    <main id="status-groups-container">
+      {% include '_status_groups.html' %}
+    </main>
+  </div>
+
   <script>
-    async function refreshStatusJobs() {
+    document.addEventListener("DOMContentLoaded", () => {
       const target = document.getElementById("status-groups-container");
       if (!target) return;
 
-      const params = new URLSearchParams(window.location.search);
-      const filter = params.get("filter") || "active";
+      async function refreshStatusJobs() {
+        const params = new URLSearchParams(window.location.search);
+        const filter = params.get("filter") || "active";
 
-      try {
-        const response = await fetch(`/status/fragment?filter=${encodeURIComponent(filter)}`, {
-          cache: "no-store"
-        });
-        if (!response.ok) return;
-        target.innerHTML = await response.text();
-      } catch (_error) {
-        // ignore transient polling issues
+        try {
+          const response = await fetch(`/status/fragment?filter=${encodeURIComponent(filter)}`, {
+            cache: "no-store"
+          });
+
+          if (!response.ok) return;
+          target.innerHTML = await response.text();
+        } catch (_error) {
+          // Ignore transient polling issues.
+        }
       }
-    }
 
-    document.addEventListener("DOMContentLoaded", () => {
       refreshStatusJobs();
       window.__statusPoller = setInterval(refreshStatusJobs, 3000);
     });
   </script>
-</head>
-<body>
-  <header class="page-header">
-    <div>
-      <h1>Status</h1>
-      <p>Live background job dashboard</p>
-    </div>
-
-    <nav class="page-nav">
-      <a class="nav-button" href="{{ url_for('ui.index') }}">Home</a>
-      <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
-    </nav>
-  </header>
-
-  <section class="summary-cards">
-    <div class="summary-card">
-      <span class="summary-label">Processing</span>
-      <strong>{{ active_count }}</strong>
-    </div>
-    <div class="summary-card">
-      <span class="summary-label">Completed</span>
-      <strong>{{ completed_count }}</strong>
-    </div>
-    <div class="summary-card">
-      <span class="summary-label">Issues</span>
-      <strong>{{ issue_count }}</strong>
-    </div>
-  </section>
-
-  <section class="status-filters">
-    <a class="filter-chip {{ 'is-active' if filter_name == 'active' else '' }}"
-       href="{{ url_for('ui.status_page', filter='active') }}">Processing</a>
-    <a class="filter-chip {{ 'is-active' if filter_name == 'all' else '' }}"
-       href="{{ url_for('ui.status_page', filter='all') }}">All</a>
-    <a class="filter-chip {{ 'is-active' if filter_name == 'completed' else '' }}"
-       href="{{ url_for('ui.status_page', filter='completed') }}">Completed</a>
-    <a class="filter-chip {{ 'is-active' if filter_name == 'issues' else '' }}"
-       href="{{ url_for('ui.status_page', filter='issues') }}">Issues</a>
-  </section>
-
-  <section id="status-groups-container">
-    {% include '_status_groups.html' %}
-  </section>
 </body>
 </html>

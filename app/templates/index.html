@@ -1,67 +1,171 @@
-# YouTube Plex Importer
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>YouTube Plex Importer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
+        <h1>YouTube Plex Importer</h1>
+        <p class="page-subtitle">
+          Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.
+        </p>
+      </div>
 
-Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.
+      <nav class="page-nav">
+        <a class="nav-button is-active" href="{{ url_for('ui.index') }}">Home</a>
+        <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
+      </nav>
+    </header>
 
-<div class="top-nav">
-  <a class="nav-button" href="{{ url_for('ui.index') }}">Home</a>
-  <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
-</div>
+    {% if result %}
+      <section id="job-result-container" data-job-id="{{ result.job_id }}">
+        {% include '_job_result_card.html' %}
+      </section>
+    {% endif %}
 
-{% if result %}
-<div id="job-result-container" data-job-id="{{ result.job_id }}">
-  {% include '_job_result_card.html' %}
-</div>
-{% endif %}
+    <main class="page-content">
+      <section class="panel tabs-panel">
+        <div class="tabs" data-tabs>
+          <button class="tab-button is-active" type="button" data-tab-target="create-tab">Create</button>
+          <button class="tab-button" type="button" data-tab-target="update-tab">Update</button>
+        </div>
 
-Create Update
+        <div id="create-tab" class="tab-panel is-active">
+          <form class="stack-form" method="post" action="{{ url_for('ui.create_form') }}">
+            <div class="form-grid">
+              <div class="field field-full">
+                <label for="youtube_url">YouTube URL</label>
+                <input id="youtube_url" name="youtube_url" type="url" required>
+              </div>
 
-  YouTube URL Desired output name (optional) Poster URL (optional) Background URL (optional) Chapter text (optional) {% include 'poster_editor.html' %}
+              <div class="field">
+                <label for="create_output_name">Desired output name (optional)</label>
+                <input id="create_output_name" name="output_name" type="text">
+              </div>
 
-Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.
+              <div class="field">
+                <label for="create_poster_url">Poster URL (optional)</label>
+                <input id="create_poster_url" name="poster_url" type="url">
+              </div>
 
-Background images should ideally be close to 16:9.
+              <div class="field">
+                <label for="create_background_url">Background URL (optional)</label>
+                <input id="create_background_url" name="background_url" type="url">
+              </div>
 
-Create Request
-  Existing output folder  Select a movie/output folder {% for output in outputs %} {{ output.name }} {% endfor %}  Poster URL (optional) Background URL (optional) Chapter text (optional) {% include 'poster_editor.html' %}
+              <div class="field field-full">
+                <label for="create_chapters_text">Chapter text (optional)</label>
+                <textarea id="create_chapters_text" name="chapters_text" rows="8"></textarea>
+              </div>
+            </div>
 
-Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.
+            {% include 'poster_editor.html' %}
 
-Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.
+            <div class="helper-copy">
+              <p>Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.</p>
+              <p>Background images should ideally be close to 16:9.</p>
+            </div>
 
-Update Output
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Create Request</button>
+            </div>
+          </form>
+        </div>
 
-<link rel="stylesheet" href="{{ url_for('static', filename='status.css') }}">
+        <div id="update-tab" class="tab-panel">
+          <form class="stack-form" method="post" action="{{ url_for('ui.update_form') }}">
+            <div class="form-grid">
+              <div class="field field-full">
+                <label for="update_output_name">Existing output folder</label>
+                <select id="update_output_name" name="output_name" required>
+                  <option value="">Select a movie/output folder</option>
+                  {% for output in outputs %}
+                    <option value="{{ output.name }}">{{ output.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
 
-<script>
-  async function refreshJobCard(jobId) {
-    const target = document.getElementById("job-result-container");
-    if (!target || !jobId) return;
+              <div class="field">
+                <label for="update_poster_url">Poster URL (optional)</label>
+                <input id="update_poster_url" name="poster_url" type="url">
+              </div>
 
-    try {
-      const response = await fetch(`/jobs/${jobId}/fragment`, { cache: "no-store" });
-      if (!response.ok) return;
+              <div class="field">
+                <label for="update_background_url">Background URL (optional)</label>
+                <input id="update_background_url" name="background_url" type="url">
+              </div>
 
-      target.innerHTML = await response.text();
+              <div class="field field-full">
+                <label for="update_chapters_text">Chapter text (optional)</label>
+                <textarea id="update_chapters_text" name="chapters_text" rows="8"></textarea>
+              </div>
+            </div>
 
-      const refreshedCard = target.querySelector("[data-job-status]");
-      const status = refreshedCard ? refreshedCard.dataset.jobStatus : null;
+            {% include 'poster_editor.html' %}
 
-      if (["finished", "failed", "stopped", "canceled"].includes(status)) {
-        clearInterval(window.__jobCardPoller);
+            <div class="helper-copy">
+              <p>Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.</p>
+              <p>Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Update Output</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const tabButtons = document.querySelectorAll("[data-tab-target]");
+      const tabPanels = document.querySelectorAll(".tab-panel");
+
+      tabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const targetId = button.dataset.tabTarget;
+
+          tabButtons.forEach((item) => item.classList.remove("is-active"));
+          tabPanels.forEach((panel) => panel.classList.remove("is-active"));
+
+          button.classList.add("is-active");
+          document.getElementById(targetId)?.classList.add("is-active");
+        });
+      });
+
+      const resultContainer = document.getElementById("job-result-container");
+      if (!resultContainer) return;
+
+      const jobId = resultContainer.dataset.jobId;
+      if (!jobId) return;
+
+      async function refreshJobCard() {
+        try {
+          const response = await fetch(`/jobs/${jobId}/fragment`, { cache: "no-store" });
+          if (!response.ok) return;
+
+          resultContainer.innerHTML = await response.text();
+
+          const card = resultContainer.querySelector("[data-job-status]");
+          const status = card?.dataset.jobStatus;
+
+          if (["finished", "failed", "stopped", "canceled"].includes(status)) {
+            clearInterval(window.__jobCardPoller);
+          }
+        } catch (_error) {
+          // Ignore transient polling issues.
+        }
       }
-    } catch (_error) {
-      // ignore transient polling issues
-    }
-  }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    const target = document.getElementById("job-result-container");
-    if (!target) return;
-
-    const jobId = target.dataset.jobId;
-    if (!jobId) return;
-
-    refreshJobCard(jobId);
-    window.__jobCardPoller = setInterval(() => refreshJobCard(jobId), 3000);
-  });
-</script>
+      refreshJobCard();
+      window.__jobCardPoller = setInterval(refreshJobCard, 3000);
+    });
+  </script>
+</body>
+</html>

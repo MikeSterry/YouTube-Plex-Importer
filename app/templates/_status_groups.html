@@ -14,7 +14,10 @@
                 <h3>{{ job.output_name or 'Unnamed Job' }}</h3>
                 <p class="job-id">{{ job.job_id }}</p>
               </div>
-              <span class="status-pill {{ job.status_css_class }}">{{ job.status }}</span>
+
+              <span class="status-pill {{ job.status_css_class }}">
+                {{ job.status }}
+              </span>
             </div>
 
             <dl class="job-meta">

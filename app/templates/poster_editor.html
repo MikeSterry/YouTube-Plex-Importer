@@ -1,56 +1,55 @@
-<div class="poster-editor full-width" data-poster-editor>
-    <div class="poster-editor-header">
-        <h3>Poster crop and zoom</h3>
-        <p class="muted">Load a poster from a URL or pick an existing local poster and drag inside the frame to reposition it.</p>
+<section class="panel poster-editor">
+  <div class="section-heading">
+    <h2>Poster crop and zoom</h2>
+    <p>Load a poster from a URL or pick an existing local poster and drag inside the frame to reposition it.</p>
+  </div>
+
+  <div class="poster-controls">
+    <div class="field">
+      <label for="poster_source_type">Poster source</label>
+      <select id="poster_source_type" name="poster_source_type">
+        <option value="url">Remote URL</option>
+        <option value="local">Existing local poster</option>
+      </select>
     </div>
 
-    <div class="poster-editor-grid">
-        <div class="poster-editor-preview-wrap">
-            <canvas class="poster-canvas" width="300" height="450" data-poster-canvas></canvas>
-        </div>
-        <div class="poster-controls">
-            <label data-poster-source-row>
-                <span>Poster source</span>
-                <select name="poster_source_type" data-poster-source-type>
-                    <option value="url">Remote URL</option>
-                    <option value="local">Existing local poster</option>
-                </select>
-            </label>
-            <label class="poster-local-file-row" data-poster-local-row>
-                <span>Local poster file</span>
-                <select name="local_poster_file" data-poster-local-file>
-                    <option value="">Select a local poster file</option>
-                </select>
-            </label>
-            <label>
-                <span>Mode</span>
-                <select name="poster_mode" data-poster-mode>
-                    <option value="cover">Cover / crop to fill</option>
-                    <option value="contain">Contain / allow black bars</option>
-                </select>
-            </label>
-            <label>
-                <span>Zoom</span>
-                <input type="range" min="0.2" max="3" step="0.01" value="1" data-poster-zoom>
-            </label>
-            <label>
-                <span>Horizontal position</span>
-                <input type="range" min="0" max="1" step="0.001" value="0.5" data-poster-offset-x>
-            </label>
-            <label>
-                <span>Vertical position</span>
-                <input type="range" min="0" max="1" step="0.001" value="0.5" data-poster-offset-y>
-            </label>
-            <div class="poster-actions">
-                <button type="button" data-poster-reset>Reset</button>
-                <button type="button" data-poster-preview>Refresh preview</button>
-            </div>
-            <div class="muted small" data-poster-message>No poster loaded yet.</div>
-        </div>
+    <div class="field">
+      <label for="local_poster_file">Local poster file</label>
+      <select id="local_poster_file" name="local_poster_file">
+        <option value="">Select a local poster file</option>
+      </select>
     </div>
 
-    <input type="hidden" name="poster_zoom" value="1" data-poster-hidden-zoom>
-    <input type="hidden" name="poster_offset_x" value="0.5" data-poster-hidden-offset-x>
-    <input type="hidden" name="poster_offset_y" value="0.5" data-poster-hidden-offset-y>
-    <input type="hidden" name="poster_mode" value="cover" data-poster-hidden-mode>
-</div>
+    <div class="field">
+      <label for="poster_mode">Mode</label>
+      <select id="poster_mode" name="poster_mode">
+        <option value="cover">Cover / crop to fill</option>
+        <option value="contain">Contain / allow black bars</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="poster_zoom">Zoom</label>
+      <input id="poster_zoom" name="poster_zoom" type="range" min="0.5" max="2.5" step="0.01" value="1.0">
+    </div>
+
+    <div class="field">
+      <label for="poster_offset_x">Horizontal position</label>
+      <input id="poster_offset_x" name="poster_offset_x" type="range" min="0" max="1" step="0.01" value="0.5">
+    </div>
+
+    <div class="field">
+      <label for="poster_offset_y">Vertical position</label>
+      <input id="poster_offset_y" name="poster_offset_y" type="range" min="0" max="1" step="0.01" value="0.5">
+    </div>
+  </div>
+
+  <div class="poster-actions">
+    <button class="secondary-button" type="button">Reset</button>
+    <button class="secondary-button" type="button">Refresh preview</button>
+  </div>
+
+  <div class="poster-preview-card">
+    <div class="poster-preview-empty">No poster loaded yet.</div>
+  </div>
+</section>
