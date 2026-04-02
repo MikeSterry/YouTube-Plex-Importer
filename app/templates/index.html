@@ -1,99 +1,67 @@
-<!doctype html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>YouTube Plex Importer</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
-</head>
-<body>
-<div class="page">
-    <header class="hero">
-        <h1>YouTube Plex Importer</h1>
-        <p>Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.</p>
-    </header>
+# YouTube Plex Importer
 
-    {% if result %}
-    <section class="card success">
-        <h2>Job submitted</h2>
-        <pre>{{ result | tojson(indent=2) }}</pre>
-    </section>
-    {% endif %}
+Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.
 
-    <section class="tabs card">
-        <div class="tab-buttons">
-            <button class="tab-button active" data-tab="create-tab">Create</button>
-            <button class="tab-button" data-tab="update-tab">Update</button>
-        </div>
-
-        <div id="create-tab" class="tab-panel active">
-            <form action="/create" method="post" class="form-grid media-form" data-form-mode="create">
-                <label>
-                    <span>YouTube URL</span>
-                    <input type="url" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." required>
-                </label>
-                <label>
-                    <span>Desired output name (optional)</span>
-                    <input type="text" name="output_name" placeholder="Architects - North America 2025 Tour">
-                </label>
-                <label>
-                    <span>Poster URL (optional)</span>
-                    <input type="url" name="poster_url" data-poster-url placeholder="https://example.com/poster.jpg">
-                </label>
-                <label>
-                    <span>Background URL (optional)</span>
-                    <input type="url" name="background_url" placeholder="https://example.com/background.jpg">
-                </label>
-                <label class="full-width">
-                    <span>Chapter text (optional)</span>
-                    <textarea name="chapters_text" rows="10" placeholder="0:00 - Intro&#10;0:37 - So Alone&#10;4:39 - Unfamiliar"></textarea>
-                </label>
-                {% include 'poster_editor.html' %}
-                <div class="hint full-width">
-                    <p>Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.</p>
-                    <p>Background images should ideally be close to 16:9.</p>
-                </div>
-                <div class="full-width actions">
-                    <button type="submit">Create Request</button>
-                </div>
-            </form>
-        </div>
-
-        <div id="update-tab" class="tab-panel">
-            <form action="/update" method="post" class="form-grid media-form" data-form-mode="update">
-                <label>
-                    <span>Existing output folder</span>
-                    <select name="output_name" data-output-name required>
-                        <option value="">Select a movie/output folder</option>
-                        {% for output in outputs %}
-                        <option value="{{ output.path }}">{{ output.name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>Poster URL (optional)</span>
-                    <input type="url" name="poster_url" data-poster-url placeholder="https://example.com/poster.jpg">
-                </label>
-                <label>
-                    <span>Background URL (optional)</span>
-                    <input type="url" name="background_url" placeholder="https://example.com/background.jpg">
-                </label>
-                <label class="full-width">
-                    <span>Chapter text (optional)</span>
-                    <textarea name="chapters_text" rows="10" placeholder="Intro - 0:00&#10;So Alone - 0:37"></textarea>
-                </label>
-                {% include 'poster_editor.html' %}
-                <div class="hint full-width">
-                    <p>Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.</p>
-                    <p>Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.</p>
-                </div>
-                <div class="full-width actions">
-                    <button type="submit">Update Output</button>
-                </div>
-            </form>
-        </div>
-    </section>
+<div class="top-nav">
+  <a class="nav-button" href="{{ url_for('ui.index') }}">Home</a>
+  <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
 </div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
-</body>
-</html>
+
+{% if result %}
+<div id="job-result-container" data-job-id="{{ result.job_id }}">
+  {% include '_job_result_card.html' %}
+</div>
+{% endif %}
+
+Create Update
+
+  YouTube URL Desired output name (optional) Poster URL (optional) Background URL (optional) Chapter text (optional) {% include 'poster_editor.html' %}
+
+Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.
+
+Background images should ideally be close to 16:9.
+
+Create Request
+  Existing output folder  Select a movie/output folder {% for output in outputs %} {{ output.name }} {% endfor %}  Poster URL (optional) Background URL (optional) Chapter text (optional) {% include 'poster_editor.html' %}
+
+Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.
+
+Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.
+
+Update Output
+
+<link rel="stylesheet" href="{{ url_for('static', filename='status.css') }}">
+
+<script>
+  async function refreshJobCard(jobId) {
+    const target = document.getElementById("job-result-container");
+    if (!target || !jobId) return;
+
+    try {
+      const response = await fetch(`/jobs/${jobId}/fragment`, { cache: "no-store" });
+      if (!response.ok) return;
+
+      target.innerHTML = await response.text();
+
+      const refreshedCard = target.querySelector("[data-job-status]");
+      const status = refreshedCard ? refreshedCard.dataset.jobStatus : null;
+
+      if (["finished", "failed", "stopped", "canceled"].includes(status)) {
+        clearInterval(window.__jobCardPoller);
+      }
+    } catch (_error) {
+      // ignore transient polling issues
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    const target = document.getElementById("job-result-container");
+    if (!target) return;
+
+    const jobId = target.dataset.jobId;
+    if (!jobId) return;
+
+    refreshJobCard(jobId);
+    window.__jobCardPoller = setInterval(() => refreshJobCard(jobId), 3000);
+  });
+</script>

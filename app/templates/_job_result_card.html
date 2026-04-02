@@ -1,0 +1,38 @@
+{% if result %}
+<section
+  class="job-card"
+  data-job-id="{{ result.job_id }}"
+  data-job-status="{{ result.status }}"
+>
+  <div class="job-card-top">
+    <div>
+      <h2>Job Submitted</h2>
+      <p class="job-id">{{ result.job_id }}</p>
+    </div>
+    <span class="status-pill {{ result.status_css_class }}">{{ result.status }}</span>
+  </div>
+
+  <dl class="job-meta">
+    <div>
+      <dt>Output</dt>
+      <dd>{{ result.output_name or '-' }}</dd>
+    </div>
+    <div>
+      <dt>Created</dt>
+      <dd>{{ result.created_at if result.created_at else '-' }}</dd>
+    </div>
+    <div>
+      <dt>Started</dt>
+      <dd>{{ result.started_at if result.started_at else '-' }}</dd>
+    </div>
+    <div>
+      <dt>Finished</dt>
+      <dd>{{ result.finished_at if result.finished_at else '-' }}</dd>
+    </div>
+    <div>
+      <dt>Duration</dt>
+      <dd>{{ result.duration_display }}</dd>
+    </div>
+  </dl>
+</section>
+{% endif %}
