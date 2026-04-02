@@ -1,150 +1,111 @@
-:root {
-  --bg: #0f172a;
-  --panel: #111827;
-  --panel-2: #1f2937;
-  --text: #e5e7eb;
-  --muted: #94a3b8;
-  --border: #334155;
-
-  --info-bg: rgba(59, 130, 246, 0.16);
-  --info-text: #93c5fd;
-
-  --success-bg: rgba(34, 197, 94, 0.16);
-  --success-text: #86efac;
-
-  --danger-bg: rgba(239, 68, 68, 0.16);
-  --danger-text: #fca5a5;
-
-  --neutral-bg: rgba(148, 163, 184, 0.16);
-  --neutral-text: #cbd5e1;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  padding: 24px;
-}
-
-.top-nav,
-.page-header,
-.summary-cards,
-.status-filters,
-.job-group {
-  margin-bottom: 24px;
-}
-
-.top-nav,
-.page-header,
-.job-group-header,
-.job-card-top,
-.page-nav {
-  display: flex;
-  gap: 12px;
-}
-
-.page-header,
-.job-group-header,
-.job-card-top {
-  justify-content: space-between;
-  align-items: center;
-}
-
-.summary-cards,
-.job-grid {
-  display: grid;
-  gap: 16px;
-}
-
 .summary-cards {
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.job-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-
-.summary-card,
-.job-card,
-.job-group,
-.empty-state {
-  background: var(--panel);
+.summary-card {
+  background: rgba(17, 24, 39, 0.72);
   border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 16px;
+  padding: 14px 16px;
+  min-height: 68px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
-.nav-button,
+.summary-label {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+}
+
+.status-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
 .filter-chip {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-height: 40px;
   padding: 10px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
   color: var(--text);
   text-decoration: none;
-  background: var(--panel);
+  background: rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.filter-chip:hover {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .filter-chip.is-active {
   background: var(--panel-2);
 }
 
-.status-pill {
-  display: inline-flex;
+.job-group {
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 12px;
+  margin-bottom: 18px;
+}
+
+.job-group-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  text-transform: capitalize;
+  gap: 12px;
+  padding: 8px 4px 14px;
 }
 
-.status-started,
-.status-queued,
-.status-deferred,
-.status-scheduled {
-  background: var(--info-bg);
-  color: var(--info-text);
+.job-group-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
 }
 
-.status-finished {
-  background: var(--success-bg);
-  color: var(--success-text);
-}
-
-.status-failed,
-.status-stopped,
-.status-canceled {
-  background: var(--danger-bg);
-  color: var(--danger-text);
-}
-
-.status-unknown {
-  background: var(--neutral-bg);
-  color: var(--neutral-text);
-}
-
-.job-id,
-.summary-label,
-.job-meta dt,
 .job-group-count {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.job-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.empty-state {
+  background: rgba(17, 24, 39, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.empty-state h2 {
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  margin: 0;
   color: var(--muted);
 }
 
-.job-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 16px;
-}
+@media (max-width: 900px) {
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
 
-.job-meta dt {
-  font-size: 0.8rem;
-  margin-bottom: 4px;
-}
-
-.job-meta dd {
-  margin: 0;
+  .job-group-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
