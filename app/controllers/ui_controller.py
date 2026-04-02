@@ -69,6 +69,22 @@ def job_fragment(job_id: str):
     return render_template(JOB_CARD_PARTIAL, result=result.to_dict())
 
 
+@ui_blueprint.post("/jobs/<job_id>/retry")
+def retry_job(job_id: str):
+    """Retry a failed/stopped/canceled job."""
+    container = current_app.config["APP_CONTAINER"]
+    container.job_recovery_handler.retry_job(job_id)
+    return redirect(url_for("ui.status_page", filter="issues"))
+
+
+@ui_blueprint.post("/jobs/<job_id>/delete")
+def delete_job(job_id: str):
+    """Delete a failed/stopped/canceled job and clean up artifacts."""
+    container = current_app.config["APP_CONTAINER"]
+    container.job_recovery_handler.delete_job(job_id)
+    return redirect(url_for("ui.status_page", filter="issues"))
+
+
 @ui_blueprint.post("/create")
 def create_form():
     """Submit a create request from the HTML form."""

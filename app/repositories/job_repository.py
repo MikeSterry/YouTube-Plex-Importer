@@ -52,3 +52,31 @@ class JobRepository:
                 continue
 
         return jobs
+
+    def delete_job(self, job_id: str) -> None:
+        """Remove a job from registries and delete its stored Redis record."""
+        connection = self._queue.connection
+
+        registries = [
+            StartedJobRegistry(queue=self._queue),
+            FinishedJobRegistry(queue=self._queue),
+            FailedJobRegistry(queue=self._queue),
+            DeferredJobRegistry(queue=self._queue),
+            ScheduledJobRegistry(queue=self._queue),
+        ]
+
+        for registry in registries:
+            try:
+                registry.remove(job_id, delete_job=False)
+            except Exception:
+                pass
+
+        try:
+            job = Job.fetch(job_id, connection=connection)
+        except Exception:
+            return
+
+        try:
+            job.delete()
+        except Exception:
+            pass

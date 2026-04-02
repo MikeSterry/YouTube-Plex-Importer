@@ -38,6 +38,29 @@
                 <dd>{{ job.duration_display }}</dd>
               </div>
             </dl>
+
+            {% if job.error_summary %}
+              <div class="job-error-summary">
+                <strong>Error</strong>
+                <p>{{ job.error_summary }}</p>
+              </div>
+            {% endif %}
+
+            {% if group.name == "Issues" %}
+              <div class="job-card-actions">
+                <form class="inline-form" method="post" action="{{ url_for('ui.retry_job', job_id=job.job_id) }}">
+                  <button class="secondary-button" type="submit">Retry</button>
+                </form>
+
+                <form
+                  class="inline-form"
+                  method="post"
+                  action="{{ url_for('ui.delete_job', job_id=job.job_id) }}"
+                  onsubmit="return confirm('Delete this failed job and clean up its artifacts?');">
+                  <button class="secondary-button danger-button" type="submit">Delete</button>
+                </form>
+              </div>
+            {% endif %}
           </article>
         {% endfor %}
       </div>

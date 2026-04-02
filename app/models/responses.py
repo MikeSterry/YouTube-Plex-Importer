@@ -18,6 +18,7 @@ class JobResponse:
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     duration_seconds: Optional[int] = None
+    error_summary: Optional[str] = None
 
     @property
     def status_enum(self) -> JobStatus:
@@ -58,6 +59,7 @@ class JobResponse:
             "duration_display": self.duration_display,
             "status_css_class": self.status_css_class,
             "group_name": self.status_enum.group_name,
+            "error_summary": self.error_summary,
         }
 
 
