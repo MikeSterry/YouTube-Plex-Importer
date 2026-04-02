@@ -54,7 +54,7 @@ def list_outputs():
     return jsonify({"outputs": outputs})
 
 
-@api_blueprint.get("/outputs/<path:output_name>/poster-files")
+@api_blueprint.get("/outputs/<output_name>/poster-files")
 def list_poster_files(output_name: str):
     """Return editable local poster files for the selected output."""
     container = current_app.config["APP_CONTAINER"]

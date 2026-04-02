@@ -1,0 +1,51 @@
+{% if job_groups %}
+  {% for group in job_groups %}
+    <section class="job-group">
+      <div class="job-group-header">
+        <h2>{{ group.name }}</h2>
+        <span class="job-group-count">{{ group.jobs|length }}</span>
+      </div>
+
+      <div class="job-grid">
+        {% for job in group.jobs %}
+          <article class="job-card">
+            <div class="job-card-top">
+              <div>
+                <h3>{{ job.output_name or 'Unnamed Job' }}</h3>
+                <p class="job-id">{{ job.job_id }}</p>
+              </div>
+
+              <span class="status-pill {{ job.status_css_class }}">
+                {{ job.status }}
+              </span>
+            </div>
+
+            <dl class="job-meta">
+              <div>
+                <dt>Created</dt>
+                <dd>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') if job.created_at else '-' }}</dd>
+              </div>
+              <div>
+                <dt>Started</dt>
+                <dd>{{ job.started_at.strftime('%Y-%m-%d %H:%M:%S') if job.started_at else '-' }}</dd>
+              </div>
+              <div>
+                <dt>Finished</dt>
+                <dd>{{ job.finished_at.strftime('%Y-%m-%d %H:%M:%S') if job.finished_at else '-' }}</dd>
+              </div>
+              <div>
+                <dt>Duration</dt>
+                <dd>{{ job.duration_display }}</dd>
+              </div>
+            </dl>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endfor %}
+{% else %}
+  <section class="empty-state">
+    <h2>No matching jobs</h2>
+    <p>Try switching the filter to view completed or issue jobs.</p>
+  </section>
+{% endif %}

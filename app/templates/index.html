@@ -1,99 +1,339 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>YouTube Plex Importer</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <meta charset="utf-8">
+  <title>YouTube Plex Importer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
 </head>
 <body>
-<div class="page">
-    <header class="hero">
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
         <h1>YouTube Plex Importer</h1>
-        <p>Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.</p>
+        <p class="page-subtitle">
+          Download best-quality MKV files, optionally add chapters, and optionally attach resized poster/background artwork.
+        </p>
+      </div>
+
+      <nav class="page-nav">
+        <a class="nav-button is-active" href="{{ url_for('ui.index') }}">Home</a>
+        <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
+      </nav>
     </header>
 
     {% if result %}
-    <section class="card success">
-        <h2>Job submitted</h2>
-        <pre>{{ result | tojson(indent=2) }}</pre>
-    </section>
+      <section id="job-result-container" data-job-id="{{ result.job_id }}">
+        {% include '_job_result_card.html' %}
+      </section>
     {% endif %}
 
-    <section class="tabs card">
-        <div class="tab-buttons">
-            <button class="tab-button active" data-tab="create-tab">Create</button>
-            <button class="tab-button" data-tab="update-tab">Update</button>
+    <main class="page-content">
+      <section class="panel tabs-panel">
+        <div class="tabs">
+          <button class="tab-button is-active" type="button" data-tab-target="create-tab">Create</button>
+          <button class="tab-button" type="button" data-tab-target="update-tab">Update</button>
         </div>
 
-        <div id="create-tab" class="tab-panel active">
-            <form action="/create" method="post" class="form-grid media-form" data-form-mode="create">
-                <label>
-                    <span>YouTube URL</span>
-                    <input type="url" name="youtube_url" placeholder="https://www.youtube.com/watch?v=..." required>
-                </label>
-                <label>
-                    <span>Desired output name (optional)</span>
-                    <input type="text" name="output_name" placeholder="Architects - North America 2025 Tour">
-                </label>
-                <label>
-                    <span>Poster URL (optional)</span>
-                    <input type="url" name="poster_url" data-poster-url placeholder="https://example.com/poster.jpg">
-                </label>
-                <label>
-                    <span>Background URL (optional)</span>
-                    <input type="url" name="background_url" placeholder="https://example.com/background.jpg">
-                </label>
-                <label class="full-width">
-                    <span>Chapter text (optional)</span>
-                    <textarea name="chapters_text" rows="10" placeholder="0:00 - Intro&#10;0:37 - So Alone&#10;4:39 - Unfamiliar"></textarea>
-                </label>
-                {% include 'poster_editor.html' %}
-                <div class="hint full-width">
-                    <p>Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.</p>
-                    <p>Background images should ideally be close to 16:9.</p>
-                </div>
-                <div class="full-width actions">
-                    <button type="submit">Create Request</button>
-                </div>
-            </form>
-        </div>
+        <section id="create-tab" class="tab-panel is-active">
+          <form class="stack-form" method="post" action="{{ url_for('ui.create_form') }}">
+            <div class="form-grid">
+              <div class="field field-full">
+                <label for="youtube_url">YouTube URL</label>
+                <input
+                  id="youtube_url"
+                  name="youtube_url"
+                  type="url"
+                  required
+                  placeholder="https://www.youtube.com/watch?v=example">
+              </div>
 
-        <div id="update-tab" class="tab-panel">
-            <form action="/update" method="post" class="form-grid media-form" data-form-mode="update">
-                <label>
-                    <span>Existing output folder</span>
-                    <select name="output_name" data-output-name required>
-                        <option value="">Select a movie/output folder</option>
-                        {% for output in outputs %}
-                        <option value="{{ output.path }}">{{ output.name }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>Poster URL (optional)</span>
-                    <input type="url" name="poster_url" data-poster-url placeholder="https://example.com/poster.jpg">
-                </label>
-                <label>
-                    <span>Background URL (optional)</span>
-                    <input type="url" name="background_url" placeholder="https://example.com/background.jpg">
-                </label>
-                <label class="full-width">
-                    <span>Chapter text (optional)</span>
-                    <textarea name="chapters_text" rows="10" placeholder="Intro - 0:00&#10;So Alone - 0:37"></textarea>
-                </label>
-                {% include 'poster_editor.html' %}
-                <div class="hint full-width">
-                    <p>Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.</p>
-                    <p>Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.</p>
-                </div>
-                <div class="full-width actions">
-                    <button type="submit">Update Output</button>
-                </div>
-            </form>
-        </div>
-    </section>
-</div>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+              <div class="field">
+                <label for="create_output_name">Desired output name (optional)</label>
+                <input
+                  id="create_output_name"
+                  name="output_name"
+                  type="text"
+                  placeholder="Ballyhoo! - Live from Las Vegas (2026)">
+              </div>
+
+              <div class="field">
+                <label for="create_poster_url">Poster URL (optional)</label>
+                <input
+                  id="create_poster_url"
+                  name="poster_url"
+                  type="url"
+                  placeholder="https://image.tmdb.org/.../poster.jpg">
+              </div>
+
+              <div class="field">
+                <label for="create_background_url">Background URL (optional)</label>
+                <input
+                  id="create_background_url"
+                  name="background_url"
+                  type="url"
+                  placeholder="https://image.tmdb.org/.../background.jpg">
+              </div>
+
+              <div class="field field-full">
+                <label for="create_chapters_text">Chapter text (optional)</label>
+                <textarea
+                  id="create_chapters_text"
+                  name="chapters_text"
+                  rows="8"
+                  placeholder="00:00:00 - Intro&#10;00:03:12 - Song Title&#10;00:07:45 - Encore"></textarea>
+              </div>
+            </div>
+
+            {% with editor_prefix='create', output_select_id='', poster_url_id='create_poster_url' %}
+              {% include 'poster_editor.html' %}
+            {% endwith %}
+
+            <div class="helper-copy">
+              <p>Poster images will be converted to a 2:3 aspect ratio. 600x900 or larger is recommended.</p>
+              <p>Background images should ideally be close to 16:9.</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Create Request</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="update-tab" class="tab-panel">
+          <form class="stack-form" method="post" action="{{ url_for('ui.update_form') }}">
+            <div class="form-grid">
+              <div class="field field-full">
+                <label for="update_output_name">Existing output folder</label>
+                <select id="update_output_name" name="output_name" required>
+                  <option value="">Select a movie/output folder</option>
+                  {% for output in outputs %}
+                    <option value="{{ output.name }}">{{ output.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="update_poster_url">Poster URL (optional)</label>
+                <input
+                  id="update_poster_url"
+                  name="poster_url"
+                  type="url"
+                  placeholder="https://image.tmdb.org/.../poster.jpg">
+              </div>
+
+              <div class="field">
+                <label for="update_background_url">Background URL (optional)</label>
+                <input
+                  id="update_background_url"
+                  name="background_url"
+                  type="url"
+                  placeholder="https://image.tmdb.org/.../background.jpg">
+              </div>
+
+              <div class="field field-full">
+                <label for="update_chapters_text">Chapter text (optional)</label>
+                <textarea
+                  id="update_chapters_text"
+                  name="chapters_text"
+                  rows="8"
+                  placeholder="00:00:00 - Intro&#10;00:03:12 - Song Title&#10;00:07:45 - Encore"></textarea>
+              </div>
+            </div>
+
+            {% with editor_prefix='update', output_select_id='update_output_name', poster_url_id='update_poster_url' %}
+              {% include 'poster_editor.html' %}
+            {% endwith %}
+
+            <div class="helper-copy">
+              <p>Update mode can edit a poster from a URL or an existing local poster file in the selected output folder.</p>
+              <p>Poster editor supports pan, zoom, and optional black padding when you switch to contain mode.</p>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Update Output</button>
+            </div>
+          </form>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const tabButtons = document.querySelectorAll("[data-tab-target]");
+      const tabPanels = document.querySelectorAll(".tab-panel");
+
+      tabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const targetId = button.dataset.tabTarget;
+
+          tabButtons.forEach((item) => item.classList.remove("is-active"));
+          tabPanels.forEach((panel) => panel.classList.remove("is-active"));
+
+          button.classList.add("is-active");
+          document.getElementById(targetId)?.classList.add("is-active");
+        });
+      });
+
+      const resultContainer = document.getElementById("job-result-container");
+      if (resultContainer) {
+        const jobId = resultContainer.dataset.jobId;
+
+        if (jobId) {
+          async function refreshJobCard() {
+            try {
+              const response = await fetch(`/jobs/${jobId}/fragment`, { cache: "no-store" });
+              if (!response.ok) return;
+
+              resultContainer.innerHTML = await response.text();
+
+              const card = resultContainer.querySelector("[data-job-status]");
+              const status = card?.dataset.jobStatus;
+
+              if (["finished", "failed", "stopped", "canceled"].includes(status)) {
+                clearInterval(window.__jobCardPoller);
+              }
+            } catch (_error) {
+              // Ignore transient polling issues.
+            }
+          }
+
+          refreshJobCard();
+          window.__jobCardPoller = setInterval(refreshJobCard, 3000);
+        }
+      }
+
+      document.querySelectorAll("[data-poster-editor]").forEach((editor) => {
+        const form = editor.closest("form");
+        const sourceType = editor.querySelector("[data-poster-source-type]");
+        const localPosterSelect = editor.querySelector("[data-local-poster-file]");
+        const previewButton = editor.querySelector("[data-refresh-preview]");
+        const resetButton = editor.querySelector("[data-reset-preview]");
+        const previewFrame = editor.querySelector("[data-poster-preview]");
+        const zoomInput = editor.querySelector('input[name="poster_zoom"]');
+        const offsetXInput = editor.querySelector('input[name="poster_offset_x"]');
+        const offsetYInput = editor.querySelector('input[name="poster_offset_y"]');
+        const modeInput = editor.querySelector('select[name="poster_mode"]');
+        const outputSelectId = editor.dataset.outputSelectId;
+        const posterUrlId = editor.dataset.posterUrlId;
+
+        const outputSelect = outputSelectId ? document.getElementById(outputSelectId) : null;
+        const posterUrlInput = posterUrlId ? document.getElementById(posterUrlId) : null;
+
+        function updateSourceMode() {
+          const isLocal = sourceType.value === "local";
+          localPosterSelect.disabled = !isLocal;
+          if (!isLocal) {
+            localPosterSelect.value = "";
+          }
+        }
+
+        async function loadLocalPosterOptions() {
+          localPosterSelect.innerHTML = '<option value="">Select a local poster file</option>';
+
+          if (!outputSelect || !outputSelect.value) {
+            return;
+          }
+
+          try {
+            const response = await fetch(
+              `/api/v1/outputs/${encodeURIComponent(outputSelect.value)}/poster-files`,
+              { cache: "no-store" }
+            );
+            if (!response.ok) return;
+
+            const payload = await response.json();
+            const files = payload.poster_files || [];
+
+            files.forEach((fileName) => {
+              const option = document.createElement("option");
+              option.value = fileName;
+              option.textContent = fileName;
+              localPosterSelect.appendChild(option);
+            });
+          } catch (_error) {
+            // Ignore local poster loading issues for now.
+          }
+        }
+
+        function renderEmptyPreview(message = "No poster loaded yet.") {
+          previewFrame.innerHTML = `<div class="poster-preview-empty">${message}</div>`;
+        }
+
+        function buildPreviewUrl() {
+          const params = new URLSearchParams({
+            zoom: zoomInput.value,
+            offset_x: offsetXInput.value,
+            offset_y: offsetYInput.value,
+            mode: modeInput.value
+          });
+
+          if (sourceType.value === "local") {
+            if (!outputSelect?.value || !localPosterSelect?.value) {
+              return null;
+            }
+            params.set("output_name", outputSelect.value);
+            params.set("file", localPosterSelect.value);
+            return `/api/v1/artwork/local-poster-preview?${params.toString()}`;
+          }
+
+          if (!posterUrlInput?.value.trim()) {
+            return null;
+          }
+
+          params.set("url", posterUrlInput.value.trim());
+          return `/api/v1/artwork/poster-preview?${params.toString()}`;
+        }
+
+        function refreshPreview() {
+          const url = buildPreviewUrl();
+          if (!url) {
+            renderEmptyPreview();
+            return;
+          }
+
+          previewFrame.innerHTML = `<img class="poster-preview-image" src="${url}" alt="Poster preview">`;
+        }
+
+        function resetControls() {
+          zoomInput.value = "1.0";
+          offsetXInput.value = "0.5";
+          offsetYInput.value = "0.5";
+          modeInput.value = "cover";
+          refreshPreview();
+        }
+
+        sourceType.addEventListener("change", async () => {
+          updateSourceMode();
+          if (sourceType.value === "local") {
+            await loadLocalPosterOptions();
+          }
+          refreshPreview();
+        });
+
+        outputSelect?.addEventListener("change", async () => {
+          if (sourceType.value === "local") {
+            await loadLocalPosterOptions();
+          }
+          refreshPreview();
+        });
+
+        localPosterSelect.addEventListener("change", refreshPreview);
+        posterUrlInput?.addEventListener("change", refreshPreview);
+        previewButton.addEventListener("click", refreshPreview);
+        resetButton.addEventListener("click", resetControls);
+        zoomInput.addEventListener("input", refreshPreview);
+        offsetXInput.addEventListener("input", refreshPreview);
+        offsetYInput.addEventListener("input", refreshPreview);
+        modeInput.addEventListener("change", refreshPreview);
+
+        updateSourceMode();
+        if (sourceType.value === "local") {
+          loadLocalPosterOptions();
+        }
+      });
+    });
+  </script>
 </body>
 </html>
