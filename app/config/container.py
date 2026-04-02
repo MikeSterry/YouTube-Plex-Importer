@@ -8,12 +8,14 @@ from rq import Queue
 from app.clients.http_client import HttpClient
 from app.clients.youtube_client import YoutubeClient
 from app.config.settings import Settings
+from app.handlers.job_recovery_handler import JobRecoveryHandler
 from app.handlers.media_request_handler import MediaRequestHandler
 from app.repositories.job_repository import JobRepository
 from app.repositories.output_repository import OutputRepository
 from app.services.chapter_service import ChapterService
 from app.services.filesystem_service import FilesystemService
 from app.services.image_service import ImageService
+from app.services.job_cleanup_service import JobCleanupService
 from app.services.job_service import JobService
 from app.services.media_service import MediaService
 from app.services.metadata_service import MetadataService
@@ -26,16 +28,20 @@ class AppContainer:
     settings: Settings
     request_handler: MediaRequestHandler
     job_service: JobService
+    job_recovery_handler: JobRecoveryHandler
     output_repository: OutputRepository
     image_service: ImageService
-
 
 
 def build_container() -> AppContainer:
     """Create the full dependency container."""
     settings = Settings.load()
     redis_conn = Redis.from_url(settings.redis_url)
-    queue = Queue(settings.queue_name, connection=redis_conn, default_timeout=settings.rq_default_timeout)
+    queue = Queue(
+        settings.queue_name,
+        connection=redis_conn,
+        default_timeout=settings.rq_default_timeout,
+    )
 
     filesystem_service = FilesystemService(settings)
     http_client = HttpClient(timeout=60)
@@ -45,8 +51,12 @@ def build_container() -> AppContainer:
     image_service = ImageService(settings, filesystem_service, http_client)
     metadata_service = MetadataService(settings, filesystem_service)
     media_service = MediaService(settings, filesystem_service, output_repository, youtube_client)
+
     job_repository = JobRepository(queue)
     job_service = JobService(job_repository)
+    job_cleanup_service = JobCleanupService(settings, filesystem_service)
+    job_recovery_handler = JobRecoveryHandler(job_service, job_cleanup_service)
+
     request_handler = MediaRequestHandler(
         output_repository=output_repository,
         media_service=media_service,
@@ -56,10 +66,12 @@ def build_container() -> AppContainer:
         job_service=job_service,
         filesystem_service=filesystem_service,
     )
+
     return AppContainer(
         settings=settings,
         request_handler=request_handler,
         job_service=job_service,
+        job_recovery_handler=job_recovery_handler,
         output_repository=output_repository,
         image_service=image_service,
     )

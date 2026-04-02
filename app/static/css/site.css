@@ -247,6 +247,15 @@ textarea {
   background: rgba(255, 255, 255, 0.06);
 }
 
+.danger-button {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: var(--danger-text);
+}
+
+.danger-button:hover {
+  background: rgba(239, 68, 68, 0.12);
+}
+
 .poster-editor {
   display: grid;
   gap: 16px;

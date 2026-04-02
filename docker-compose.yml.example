@@ -12,12 +12,7 @@ services:
     depends_on:
       - redis
     command: >
-      sh -c "gunicorn
-      --bind 0.0.0.0:5000
-      --workers 2
-      --threads 2
-      --timeout 7200
-      run:app"
+      sh -c "gunicorn --bind 0.0.0.0:5000 --workers 2 --threads 2 --timeout 7200 run:app"
     healthcheck:
       test: ["CMD", "python", "scripts/healthcheck.py"]
       interval: 30s
@@ -52,4 +47,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: youtube-plex-importer-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1000"]
+    volumes:
+      - redis_data:/data
     restart: unless-stopped
+
+volumes:
+  redis_data:

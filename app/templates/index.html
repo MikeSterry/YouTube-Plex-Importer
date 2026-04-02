@@ -54,7 +54,7 @@
                   id="create_output_name"
                   name="output_name"
                   type="text"
-                  placeholder="Ballyhoo! - Live from Las Vegas (2026)">
+                  placeholder="Ballyhoo! - Live in Vegas (2026)">
               </div>
 
               <div class="field">
@@ -205,7 +205,6 @@
       }
 
       document.querySelectorAll("[data-poster-editor]").forEach((editor) => {
-        const form = editor.closest("form");
         const sourceType = editor.querySelector("[data-poster-source-type]");
         const localPosterSelect = editor.querySelector("[data-local-poster-file]");
         const previewButton = editor.querySelector("[data-refresh-preview]");

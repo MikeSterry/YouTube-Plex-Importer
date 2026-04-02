@@ -83,6 +83,36 @@
   gap: 12px;
 }
 
+.job-error-summary {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+}
+
+.job-error-summary strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.job-error-summary p {
+  margin: 0;
+  color: var(--muted);
+  word-break: break-word;
+}
+
+.job-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.inline-form {
+  margin: 0;
+}
+
 .empty-state {
   background: rgba(17, 24, 39, 0.72);
   border: 1px solid var(--border);

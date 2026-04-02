@@ -1,6 +1,6 @@
 """JSON API routes."""
 
-from flask import Blueprint, current_app, jsonify, request, Response
+from flask import Blueprint, Response, current_app, jsonify, request
 
 from app.models.domain import PosterCropSettings
 from app.models.requests import CreateMediaRequest, UpdateMediaRequest
@@ -20,8 +20,10 @@ def create_request():
         chapters_text=_optional_value(payload.get("chapters_text")),
         poster_crop_settings=_poster_crop_settings(payload),
     )
+
     if not create_model.youtube_url:
         return jsonify({"error": "youtube_url is required"}), 400
+
     container = current_app.config["APP_CONTAINER"]
     response = container.request_handler.submit_create(create_model)
     return jsonify(response.to_dict()), 202
@@ -39,8 +41,10 @@ def update_request():
         chapters_text=_optional_value(payload.get("chapters_text")),
         poster_crop_settings=_poster_crop_settings(payload),
     )
+
     if not update_model.output_name:
         return jsonify({"error": "output_name is required"}), 400
+
     container = current_app.config["APP_CONTAINER"]
     response = container.request_handler.submit_update(update_model)
     return jsonify(response.to_dict()), 202
@@ -54,7 +58,7 @@ def list_outputs():
     return jsonify({"outputs": outputs})
 
 
-@api_blueprint.get("/outputs/<output_name>/poster-files")
+@api_blueprint.get("/outputs/<path:output_name>/poster-files")
 def list_poster_files(output_name: str):
     """Return editable local poster files for the selected output."""
     container = current_app.config["APP_CONTAINER"]
@@ -76,6 +80,7 @@ def artwork_source():
     image_url = request.args.get("url", "").strip()
     if not image_url:
         return jsonify({"error": "url is required"}), 400
+
     container = current_app.config["APP_CONTAINER"]
     image_bytes, content_type = container.image_service.fetch_source_bytes(image_url)
     return Response(image_bytes, mimetype=content_type)
@@ -96,6 +101,7 @@ def poster_preview():
     image_url = request.args.get("url", "").strip()
     if not image_url:
         return jsonify({"error": "url is required"}), 400
+
     crop_settings = _crop_settings_from_args()
     container = current_app.config["APP_CONTAINER"]
     image_bytes = container.image_service.build_poster_preview_bytes(image_url, crop_settings)
@@ -116,8 +122,10 @@ def _resolve_local_poster_path():
     """Resolve a local poster file from request arguments."""
     output_name = request.args.get("output_name", "").strip()
     file_name = request.args.get("file", "").strip()
+
     if not output_name or not file_name:
         raise ValueError("output_name and file are required")
+
     container = current_app.config["APP_CONTAINER"]
     return container.output_repository.resolve_poster_file(output_name, file_name)
 
@@ -136,6 +144,7 @@ def _poster_crop_settings(payload):
     """Build poster crop settings from request payload when provided."""
     if not (_poster_url_or_none(payload) or _local_poster_file_or_none(payload)):
         return None
+
     return PosterCropSettings(
         zoom=float(payload.get("poster_zoom", 1.0)),
         offset_x=float(payload.get("poster_offset_x", 0.5)),
