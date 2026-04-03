@@ -1,9 +1,16 @@
 """UI routes."""
 
+from __future__ import annotations
+
+import logging
+
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 
+from app.exceptions import ControllerRenderError, InvalidFieldError, MissingFieldError
 from app.models.domain import PosterCropSettings
 from app.models.requests import CreateMediaRequest, UpdateMediaRequest
+
+LOGGER = logging.getLogger(__name__)
 
 ui_blueprint = Blueprint("ui", __name__)
 
@@ -26,13 +33,11 @@ def status_page():
     """Render the status page."""
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
-
     active_only, group = _status_filter_options(filter_name)
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
     )
-
     return render_template(
         STATUS_HTML,
         job_groups=collection.grouped(),
@@ -48,13 +53,11 @@ def status_fragment():
     """Render only the status group portion for polling."""
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
-
     active_only, group = _status_filter_options(filter_name)
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
     )
-
     return render_template(
         STATUS_GROUPS_PARTIAL,
         job_groups=collection.grouped(),
@@ -88,41 +91,65 @@ def delete_job(job_id: str):
 @ui_blueprint.post("/create")
 def create_form():
     """Submit a create request from the HTML form."""
-    model = CreateMediaRequest(
-        youtube_url=request.form.get("youtube_url", "").strip(),
-        output_name=_optional_value(request.form.get("output_name")),
-        poster_url=_optional_value(request.form.get("poster_url")),
-        background_url=_optional_value(request.form.get("background_url")),
-        chapters_text=_optional_value(request.form.get("chapters_text")),
-        poster_crop_settings=_poster_crop_settings(request.form),
-    )
-    if not model.youtube_url:
-        return redirect(url_for("ui.index"))
-
     container = current_app.config["APP_CONTAINER"]
-    result = container.request_handler.submit_create(model)
     outputs = container.output_repository.list_outputs()
-    return render_template(INDEX_HTML, result=result.to_dict(), outputs=outputs)
+
+    try:
+        model = CreateMediaRequest(
+            youtube_url=_required_form_value("youtube_url"),
+            output_name=_optional_value(request.form.get("output_name")),
+            poster_url=_optional_value(request.form.get("poster_url")),
+            background_url=_optional_value(request.form.get("background_url")),
+            chapters_text=_optional_value(request.form.get("chapters_text")),
+            poster_crop_settings=_poster_crop_settings(request.form),
+        )
+        result = container.request_handler.submit_create(model)
+        return render_template(INDEX_HTML, result=result.to_dict(), outputs=outputs)
+    except (MissingFieldError, InvalidFieldError, ControllerRenderError) as exc:
+        LOGGER.info("Create form validation failed: %s", exc)
+        return render_template(INDEX_HTML, result=_error_result(str(exc)), outputs=outputs), 400
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Create form failed unexpectedly", exc_info=exc)
+        return (
+            render_template(
+                INDEX_HTML,
+                result=_error_result("Something went wrong while submitting the create request."),
+                outputs=outputs,
+            ),
+            500,
+        )
 
 
 @ui_blueprint.post("/update")
 def update_form():
     """Submit an update request from the HTML form."""
-    model = UpdateMediaRequest(
-        output_name=request.form.get("output_name", "").strip(),
-        poster_url=_poster_url_or_none(request.form),
-        local_poster_file=_local_poster_file_or_none(request.form),
-        background_url=_optional_value(request.form.get("background_url")),
-        chapters_text=_optional_value(request.form.get("chapters_text")),
-        poster_crop_settings=_poster_crop_settings(request.form),
-    )
-    if not model.output_name:
-        return redirect(url_for("ui.index"))
-
     container = current_app.config["APP_CONTAINER"]
-    result = container.request_handler.submit_update(model)
     outputs = container.output_repository.list_outputs()
-    return render_template(INDEX_HTML, result=result.to_dict(), outputs=outputs)
+
+    try:
+        model = UpdateMediaRequest(
+            output_name=_required_form_value("output_name"),
+            poster_url=_poster_url_or_none(request.form),
+            local_poster_file=_local_poster_file_or_none(request.form),
+            background_url=_optional_value(request.form.get("background_url")),
+            chapters_text=_optional_value(request.form.get("chapters_text")),
+            poster_crop_settings=_poster_crop_settings(request.form),
+        )
+        result = container.request_handler.submit_update(model)
+        return render_template(INDEX_HTML, result=result.to_dict(), outputs=outputs)
+    except (MissingFieldError, InvalidFieldError, ControllerRenderError) as exc:
+        LOGGER.info("Update form validation failed: %s", exc)
+        return render_template(INDEX_HTML, result=_error_result(str(exc)), outputs=outputs), 400
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Update form failed unexpectedly", exc_info=exc)
+        return (
+            render_template(
+                INDEX_HTML,
+                result=_error_result("Something went wrong while submitting the update request."),
+                outputs=outputs,
+            ),
+            500,
+        )
 
 
 def _status_filter_options(filter_name: str) -> tuple[bool, str | None]:
@@ -146,9 +173,9 @@ def _poster_crop_settings(form_data):
         return None
 
     return PosterCropSettings(
-        zoom=float(form_data.get("poster_zoom", "1.0") or 1.0),
-        offset_x=float(form_data.get("poster_offset_x", "0.5") or 0.5),
-        offset_y=float(form_data.get("poster_offset_y", "0.5") or 0.5),
+        zoom=_float_form_value(form_data.get("poster_zoom", "1.0"), "poster_zoom", 1.0),
+        offset_x=_float_form_value(form_data.get("poster_offset_x", "0.5"), "poster_offset_x", 0.5),
+        offset_y=_float_form_value(form_data.get("poster_offset_y", "0.5"), "poster_offset_y", 0.5),
         mode=(form_data.get("poster_mode") or "cover").strip() or "cover",
     )
 
@@ -167,6 +194,41 @@ def _local_poster_file_or_none(form_data):
     return _optional_value(form_data.get("local_poster_file"))
 
 
+def _required_form_value(field_name: str) -> str:
+    """Return a required non-empty form field."""
+    value = request.form.get(field_name, "")
+    if not isinstance(value, str) or not value.strip():
+        raise MissingFieldError(field_name)
+    return value.strip()
+
+
+def _float_form_value(raw_value, field_name: str, default: float) -> float:
+    """Convert a form field into a float with a friendly validation error."""
+    if raw_value is None or str(raw_value).strip() == "":
+        return default
+
+    try:
+        return float(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise InvalidFieldError(field_name, "must be a valid number") from exc
+
+
 def _optional_value(value):
     """Normalize empty form values to None."""
     return value.strip() if isinstance(value, str) and value.strip() else None
+
+
+def _error_result(message: str) -> dict:
+    """Create a template-friendly error card payload."""
+    return {
+        "job_id": "Request error",
+        "status": "Failed",
+        "status_css_class": "status-failed",
+        "output_name": "-",
+        "created_at": "-",
+        "started_at": "-",
+        "finished_at": "-",
+        "duration_display": "-",
+        "error_message": message,
+        "is_error": True,
+    }

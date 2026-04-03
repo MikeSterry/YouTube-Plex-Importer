@@ -1,19 +1,25 @@
 """App factory and dependency wiring."""
 
+from __future__ import annotations
+
+import logging
 import uuid
 
-from flask import Flask, g, request
+from flask import Flask, g, jsonify, request
 
 from app.config.container import build_container
+from app.config.logging_config import configure_logging
 from app.controllers.api_controller import api_blueprint
 from app.controllers.health_controller import health_blueprint
 from app.controllers.ui_controller import ui_blueprint
-from app.config.logging_config import configure_logging
+from app.exceptions import AppError
 from app.utils.logging_context import (
     clear_job_id,
     clear_request_id,
     set_request_id,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def create_app() -> Flask:
@@ -28,6 +34,7 @@ def create_app() -> Flask:
     app.container = container
 
     _register_request_hooks(app)
+    _register_error_handlers(app)
     _register_blueprints(app)
     return app
 
@@ -56,9 +63,37 @@ def _register_request_hooks(app: Flask) -> None:
         clear_job_id()
 
 
+def _register_error_handlers(app: Flask) -> None:
+    """Register JSON error handlers for API routes."""
+
+    @app.errorhandler(AppError)
+    def handle_app_error(error: AppError):
+        """Return structured responses for known application errors."""
+        payload = error.to_payload()
+        if request.blueprint == "api":
+            return jsonify(payload.to_dict()), payload.status_code
+        raise error
+
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error: Exception):
+        """Return a predictable JSON 500 response for unhandled API exceptions."""
+        LOGGER.exception("Unhandled application error", exc_info=error)
+        if request.blueprint == "api":
+            return (
+                jsonify(
+                    {
+                        "error": "An unexpected server error occurred.",
+                        "code": "internal_server_error",
+                        "status_code": 500,
+                    }
+                ),
+                500,
+            )
+        raise error
+
+
 def _register_blueprints(app: Flask) -> None:
     """Register all application blueprints."""
     app.register_blueprint(ui_blueprint)
     app.register_blueprint(api_blueprint)
     app.register_blueprint(health_blueprint)
-
