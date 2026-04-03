@@ -7,6 +7,7 @@ from yt_dlp import YoutubeDL
 from app.models.domain import DownloadResult
 from app.utils.file_utils import FileNameUtils
 from app.utils.logger_factory import get_logger
+from app.exceptions import YoutubeDownloadError
 
 
 LOGGER = get_logger(__name__)
@@ -19,6 +20,7 @@ class YoutubeClient:
         """Store collaborator dependencies."""
         self._settings = settings
         self._filesystem_service = filesystem_service
+        self._max_retries = 3
 
     def download_best_mkv(
         self,
@@ -55,9 +57,7 @@ class YoutubeClient:
         with YoutubeDL(self._build_common_options()) as ydl:
             return ydl.extract_info(youtube_url, download=False)
 
-
     def _download_media(self, youtube_url: str, output_template: str) -> None:
-        """Download the actual media to disk."""
         options = self._build_common_options()
         options.update(
             {
@@ -67,16 +67,19 @@ class YoutubeClient:
             }
         )
 
-        attempts = 3
-        for attempt in range(1, attempts + 1):
+        max_attempts = 3  # matches your test expectations
+
+        for attempt in range(1, max_attempts + 1):
             try:
                 with YoutubeDL(options) as ydl:
                     ydl.download([youtube_url])
                 return
-            except DownloadError:
-                if attempt >= attempts:
-                    raise
-                time.sleep(min(attempt * 5, 15))
+
+            except DownloadError as exc:
+                if attempt < max_attempts:
+                    time.sleep(attempt * 5)
+                else:
+                    raise YoutubeDownloadError(str(exc)) from exc
 
 
     def _build_common_options(self) -> dict:
