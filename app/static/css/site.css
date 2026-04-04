@@ -55,6 +55,7 @@ a {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 24px;
+  padding-left: 20px;
 }
 
 .page-header h1 {
@@ -107,6 +108,10 @@ a {
   border-radius: 16px;
   padding: 20px;
   backdrop-filter: blur(6px);
+}
+
+.panel + .panel {
+  margin-top: 16px;
 }
 
 .tabs {
