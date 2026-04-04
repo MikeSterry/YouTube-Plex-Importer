@@ -1,3 +1,4 @@
+# tests/clients/test_youtube_client.py
 from __future__ import annotations
 
 from pathlib import Path
@@ -95,40 +96,51 @@ def client(settings, filesystem_service, settings_service, monkeypatch):
 
 
 def test_build_output_name_uses_desired_output_name(client):
-    info = {"title": "Ignored Title", "id": "abc123"}
-
+    info = {"title": "Ignored Title", "id": "abc123", "upload_date": "20260404"}
     result = client._build_output_name(info, "My Custom Name")
-
-    assert result == "My Custom Name"
+    assert result == "My Custom Name (2026)"
 
 
 def test_build_output_name_uses_title_when_desired_name_missing(client):
-    info = {"title": "Test Title", "id": "abc123"}
-
+    info = {"title": "Test Title", "id": "abc123", "upload_date": "20260404"}
     result = client._build_output_name(info, None)
-
-    assert result == "Test Title"
+    assert result == "Test Title (2026)"
 
 
 def test_build_output_name_uses_id_when_title_missing(client):
-    info = {"id": "abc123"}
-
+    info = {"id": "abc123", "upload_date": "20260404"}
     result = client._build_output_name(info, None)
-
-    assert result == "abc123"
+    assert result == "abc123 (2026)"
 
 
 def test_build_output_name_uses_video_when_title_and_id_missing(client):
-    info = {}
-
+    info = {"upload_date": "20260404"}
     result = client._build_output_name(info, None)
+    assert result == "video (2026)"
 
-    assert result == "video"
+
+def test_build_output_name_skips_year_when_upload_date_missing(client):
+    info = {"title": "Test Title", "id": "abc123"}
+    result = client._build_output_name(info, None)
+    assert result == "Test Title"
+
+
+def test_build_output_name_replaces_existing_trailing_year(client):
+    info = {"title": "Ignored", "id": "abc123", "upload_date": "20260404"}
+    result = client._build_output_name(info, "My Movie (1999)")
+    assert result == "My Movie (2026)"
+
+
+def test_extract_upload_year_returns_year(client):
+    assert client._extract_upload_year({"upload_date": "20260404"}) == "2026"
+
+
+def test_extract_upload_year_returns_none_when_missing(client):
+    assert client._extract_upload_year({}) is None
 
 
 def test_extract_info_uses_youtubedl_and_returns_metadata(client):
     result = client._extract_info("https://youtube.com/watch?v=abc123")
-
     assert result == {"title": "Test Title", "id": "abc123"}
     assert len(FakeYoutubeDL.created_instances) == 1
     assert FakeYoutubeDL.created_instances[0].options["quiet"] is True
@@ -137,7 +149,6 @@ def test_extract_info_uses_youtubedl_and_returns_metadata(client):
 
 def test_build_common_options_without_cookiefile(client):
     options = client._build_common_options()
-
     assert options["quiet"] is True
     assert options["noprogress"] is True
     assert options["skip_download"] is False
@@ -163,7 +174,6 @@ def test_build_common_options_with_cookiefile(settings, filesystem_service, monk
     client = YoutubeClient(settings, filesystem_service, settings_service)
 
     options = client._build_common_options()
-
     assert options["cookiefile"] == "/data/youtube_cookies.txt"
 
 
@@ -195,14 +205,12 @@ def test_build_retry_sleep_returns_none_for_empty_expression(client):
 
 def test_build_retry_sleep_with_fixed_seconds(client):
     sleep_fn = client._build_retry_sleep("5")
-
     assert sleep_fn(1) == 5.0
     assert sleep_fn(99) == 5.0
 
 
 def test_build_linear_sleep(client):
     sleep_fn = client._build_linear_sleep("1:5:2")
-
     assert sleep_fn(1) == 1.0
     assert sleep_fn(2) == 3.0
     assert sleep_fn(3) == 5.0
@@ -211,7 +219,6 @@ def test_build_linear_sleep(client):
 
 def test_build_exp_sleep(client):
     sleep_fn = client._build_exp_sleep("1:8:2")
-
     assert sleep_fn(1) == 1.0
     assert sleep_fn(2) == 2.0
     assert sleep_fn(3) == 4.0
@@ -219,11 +226,13 @@ def test_build_exp_sleep(client):
     assert sleep_fn(5) == 8.0
 
 
-def test_find_video_path_returns_matching_mkv_and_normalizes(tmp_path, client, filesystem_service):
-    target = tmp_path / "Test Title.mkv"
+def test_find_video_path_returns_matching_mkv_and_normalizes(
+    tmp_path, client, filesystem_service
+):
+    target = tmp_path / "Test Title (2026).mkv"
     target.write_text("video")
 
-    result = client._find_video_path(tmp_path, "Test Title")
+    result = client._find_video_path(tmp_path, "Test Title (2026)")
 
     assert result == target
     assert filesystem_service.normalized_paths == [target]
@@ -235,7 +244,13 @@ def test_find_video_path_raises_when_missing(tmp_path, client):
 
 
 def test_download_best_mkv_returns_download_result(tmp_path, client):
-    output_file = tmp_path / "My Output.mkv"
+    FakeYoutubeDL.extract_info_response = {
+        "title": "Test Title",
+        "id": "abc123",
+        "upload_date": "20260404",
+    }
+
+    output_file = tmp_path / "My Output (2026).mkv"
     output_file.write_text("video")
 
     result = client.download_best_mkv(
@@ -245,30 +260,32 @@ def test_download_best_mkv_returns_download_result(tmp_path, client):
     )
 
     assert result.title == "Test Title"
-    assert result.output_name == "My Output"
+    assert result.output_name == "My Output (2026)"
     assert result.video_path == output_file
     assert output_file in result.aux_files
 
 
 def test_download_media_passes_format_options(tmp_path, client):
-    output_file = tmp_path / "Test Title.mkv"
+    output_file = tmp_path / "Test Title (2026).mkv"
     output_file.write_text("video")
 
     client._download_media(
         "https://youtube.com/watch?v=abc123",
-        str(tmp_path / "Test Title.%(ext)s"),
+        str(tmp_path / "Test Title (2026).%(ext)s"),
     )
 
     assert len(FakeYoutubeDL.created_instances) == 1
     options = FakeYoutubeDL.created_instances[0].options
     assert options["format"] == "bestvideo*+bestaudio/best"
     assert options["merge_output_format"] == "mkv"
-    assert options["outtmpl"] == str(tmp_path / "Test Title.%(ext)s")
+    assert options["outtmpl"] == str(tmp_path / "Test Title (2026).%(ext)s")
 
 
 def test_download_media_retries_and_succeeds(tmp_path, client, monkeypatch):
     sleep_calls = []
-    monkeypatch.setattr(youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds)
+    )
 
     FakeYoutubeDL.download_side_effects = [
         DownloadError("temporary failure"),
@@ -284,9 +301,13 @@ def test_download_media_retries_and_succeeds(tmp_path, client, monkeypatch):
     assert sleep_calls == [5]
 
 
-def test_download_media_raises_youtube_download_error_after_retries(tmp_path, client, monkeypatch):
+def test_download_media_raises_youtube_download_error_after_retries(
+    tmp_path, client, monkeypatch
+):
     sleep_calls = []
-    monkeypatch.setattr(youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds)
+    )
 
     FakeYoutubeDL.download_side_effects = [
         DownloadError("failure 1"),
@@ -305,13 +326,12 @@ def test_download_media_raises_youtube_download_error_after_retries(tmp_path, cl
 
 
 def test_download_media_appends_settings_hint_when_bot_error_and_no_cookies(
-    settings,
-    filesystem_service,
-    monkeypatch,
-    tmp_path,
+    settings, filesystem_service, monkeypatch, tmp_path
 ):
     sleep_calls = []
-    monkeypatch.setattr(youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds)
+    )
     monkeypatch.setattr(youtube_client_module, "YoutubeDL", FakeYoutubeDL)
 
     FakeYoutubeDL.download_side_effects = [
@@ -329,18 +349,19 @@ def test_download_media_appends_settings_hint_when_bot_error_and_no_cookies(
             str(tmp_path / "Test Title.%(ext)s"),
         )
 
-    assert "Configure YouTube cookies on the Settings page and try again." in str(exc_info.value)
+    assert "Configure YouTube cookies on the Settings page and try again." in str(
+        exc_info.value
+    )
     assert sleep_calls == [5, 10]
 
 
 def test_download_media_does_not_append_settings_hint_when_cookiefile_exists(
-    settings,
-    filesystem_service,
-    monkeypatch,
-    tmp_path,
+    settings, filesystem_service, monkeypatch, tmp_path
 ):
     sleep_calls = []
-    monkeypatch.setattr(youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds))
+    monkeypatch.setattr(
+        youtube_client_module.time, "sleep", lambda seconds: sleep_calls.append(seconds)
+    )
     monkeypatch.setattr(youtube_client_module, "YoutubeDL", FakeYoutubeDL)
 
     FakeYoutubeDL.download_side_effects = [
@@ -362,5 +383,7 @@ def test_download_media_does_not_append_settings_hint_when_cookiefile_exists(
             str(tmp_path / "Test Title.%(ext)s"),
         )
 
-    assert "Configure YouTube cookies on the Settings page and try again." not in str(exc_info.value)
+    assert "Configure YouTube cookies on the Settings page and try again." not in str(
+        exc_info.value
+    )
     assert sleep_calls == [5, 10]
