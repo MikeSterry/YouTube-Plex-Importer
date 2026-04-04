@@ -1,7 +1,9 @@
+# app/clients/youtube_client.py
 """YouTube download integration using yt-dlp."""
 
 from __future__ import annotations
 
+import re
 import time
 from pathlib import Path
 
@@ -19,7 +21,7 @@ LOGGER = get_logger(__name__)
 class YoutubeClient:
     """Client responsible for downloading YouTube content."""
 
-    def __init__(self, settings, filesystem_service, settings_service) -> None:
+    def __init__(self, settings, filesystem_service, settings_service=None) -> None:
         """Store collaborator dependencies."""
         self._settings = settings
         self._filesystem_service = filesystem_service
@@ -54,19 +56,21 @@ class YoutubeClient:
     def _build_output_name(self, info: dict, desired_output_name: str | None) -> str:
         """Choose a readable output base name for the downloaded media."""
         if desired_output_name:
-            return FileNameUtils.sanitize_display_name(desired_output_name)
+            base_name = FileNameUtils.sanitize_display_name(desired_output_name)
+        else:
+            fallback_name = info.get("title") or info.get("id") or "video"
+            base_name = FileNameUtils.sanitize_display_name(fallback_name)
 
-        fallback_name = info.get("title") or info.get("id") or "video"
-        return FileNameUtils.sanitize_display_name(fallback_name)
+        upload_year = self._extract_upload_year(info)
+        return self._apply_year_suffix(base_name, upload_year)
 
     def _extract_info(self, youtube_url: str) -> dict:
         """Read video metadata without downloading the file."""
-        options = self._build_common_options()
-        with YoutubeDL(options) as ydl:
+        with YoutubeDL(self._build_common_options()) as ydl:
             return ydl.extract_info(youtube_url, download=False)
 
     def _download_media(self, youtube_url: str, output_template: str) -> None:
-        """Download media with retry handling."""
+        """Download media with yt-dlp and retry transient failures."""
         options = self._build_common_options()
         options.update(
             {
@@ -77,6 +81,7 @@ class YoutubeClient:
         )
 
         max_attempts = 3
+
         for attempt in range(1, max_attempts + 1):
             try:
                 with YoutubeDL(options) as ydl:
@@ -88,11 +93,12 @@ class YoutubeClient:
                     continue
 
                 message = str(exc)
-                if "Sign in to confirm you’re not a bot" in message and not self._settings_service.get_youtube_cookie_file_path():
+                if self._is_bot_challenge_error(message) and not self._get_cookiefile():
                     message = (
-                        f"{message} Configure YouTube cookies on the Settings page "
-                        f"and try again."
+                        f"{message} "
+                        "Configure YouTube cookies on the Settings page and try again."
                     )
+
                 raise YoutubeDownloadError(message) from exc
 
     def _build_common_options(self) -> dict:
@@ -110,17 +116,23 @@ class YoutubeClient:
             "extractor_retries": self._settings.ytdlp_extractor_retries,
             "retry_sleep_functions": {
                 "http": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_http),
-                "fragment": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_fragment),
-                "file_access": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_file_access),
-                "extractor": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_extractor),
+                "fragment": self._build_retry_sleep(
+                    self._settings.ytdlp_retry_sleep_fragment
+                ),
+                "file_access": self._build_retry_sleep(
+                    self._settings.ytdlp_retry_sleep_file_access
+                ),
+                "extractor": self._build_retry_sleep(
+                    self._settings.ytdlp_retry_sleep_extractor
+                ),
             },
             "http_chunk_size": self._settings.ytdlp_http_chunk_size,
             "throttledratelimit": self._parse_rate(self._settings.ytdlp_throttled_rate),
         }
 
-        cookie_file = self._settings_service.get_youtube_cookie_file_path()
-        if cookie_file:
-            options["cookiefile"] = cookie_file
+        cookiefile = self._get_cookiefile()
+        if cookiefile:
+            options["cookiefile"] = cookiefile
 
         return options
 
@@ -131,17 +143,57 @@ class YoutubeClient:
             return candidate
         raise FileNotFoundError("Unable to locate downloaded MKV file.")
 
+    def _extract_upload_year(self, info: dict) -> str | None:
+        """Extract the year from yt-dlp upload_date metadata."""
+        upload_date = info.get("upload_date")
+        if not upload_date:
+            return None
+
+        cleaned = str(upload_date).strip()
+        match = re.match(r"^(\d{4})", cleaned)
+        if not match:
+            return None
+
+        return match.group(1)
+
+    def _apply_year_suffix(self, base_name: str, year: str | None) -> str:
+        """Append or replace a trailing ' (YYYY)' suffix on a filename stem."""
+        cleaned_base = re.sub(r"\s\(\d{4}\)$", "", base_name).rstrip()
+        if not year:
+            return cleaned_base
+        return f"{cleaned_base} ({year})"
+
+    def _get_cookiefile(self) -> str | None:
+        """Return the configured YouTube cookie file, if available."""
+        if self._settings_service is None:
+            return None
+
+        getter = getattr(self._settings_service, "get_youtube_cookie_file_path", None)
+        if getter is None:
+            return None
+
+        return getter()
+
+    def _is_bot_challenge_error(self, message: str) -> bool:
+        """Return True when yt-dlp reports YouTube's anti-bot sign-in challenge."""
+        normalized = message.lower()
+        return "sign in to confirm" in normalized and "not a bot" in normalized
+
     def _build_retry_sleep(self, expr: str):
         """Build a yt-dlp retry sleep function from a simple config string."""
         if not expr:
             return None
+
         if expr.isdigit():
             seconds = float(expr)
             return lambda *_args, **_kwargs: seconds
+
         if expr.startswith("linear="):
             return self._build_linear_sleep(expr.removeprefix("linear="))
+
         if expr.startswith("exp="):
             return self._build_exp_sleep(expr.removeprefix("exp="))
+
         return None
 
     def _build_linear_sleep(self, payload: str):
@@ -170,7 +222,7 @@ class YoutubeClient:
 
         return exp_sleep
 
-    def _parse_rate(self, value: str) -> int | None:
+    def _parse_rate(self, value: str | None) -> int | None:
         """Parse a human-readable byte rate like 100K or 4M."""
         if not value:
             return None
@@ -181,6 +233,8 @@ class YoutubeClient:
             "M": 1024 * 1024,
             "G": 1024 * 1024 * 1024,
         }
+
         if cleaned[-1] in suffixes:
             return int(float(cleaned[:-1]) * suffixes[cleaned[-1]])
+
         return int(float(cleaned))
