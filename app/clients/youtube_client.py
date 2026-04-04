@@ -1,14 +1,17 @@
 """YouTube download integration using yt-dlp."""
 
+from __future__ import annotations
+
 import time
-from yt_dlp.utils import DownloadError
 from pathlib import Path
+
 from yt_dlp import YoutubeDL
+from yt_dlp.utils import DownloadError
+
+from app.exceptions import YoutubeDownloadError
 from app.models.domain import DownloadResult
 from app.utils.file_utils import FileNameUtils
 from app.utils.logger_factory import get_logger
-from app.exceptions import YoutubeDownloadError
-
 
 LOGGER = get_logger(__name__)
 
@@ -16,11 +19,11 @@ LOGGER = get_logger(__name__)
 class YoutubeClient:
     """Client responsible for downloading YouTube content."""
 
-    def __init__(self, settings, filesystem_service) -> None:
+    def __init__(self, settings, filesystem_service, settings_service) -> None:
         """Store collaborator dependencies."""
         self._settings = settings
         self._filesystem_service = filesystem_service
-        self._max_retries = 3
+        self._settings_service = settings_service
 
     def download_best_mkv(
         self,
@@ -31,12 +34,16 @@ class YoutubeClient:
         """Download the highest quality video/audio and mux it into MKV."""
         LOGGER.info("Extracting YouTube metadata.")
         info = self._extract_info(youtube_url)
+
         output_name = self._build_output_name(info, desired_output_name)
         target_template = str(work_dir / f"{output_name}.%(ext)s")
+
         LOGGER.info("Downloading YouTube media.", extra={"output_name": output_name})
         self._download_media(youtube_url, target_template)
+
         video_path = self._find_video_path(work_dir, output_name)
         LOGGER.info("Located final MKV.", extra={"video_path": str(video_path)})
+
         return DownloadResult(
             title=info.get("title", output_name),
             output_name=output_name,
@@ -54,10 +61,12 @@ class YoutubeClient:
 
     def _extract_info(self, youtube_url: str) -> dict:
         """Read video metadata without downloading the file."""
-        with YoutubeDL(self._build_common_options()) as ydl:
+        options = self._build_common_options()
+        with YoutubeDL(options) as ydl:
             return ydl.extract_info(youtube_url, download=False)
 
     def _download_media(self, youtube_url: str, output_template: str) -> None:
+        """Download media with retry handling."""
         options = self._build_common_options()
         options.update(
             {
@@ -67,24 +76,28 @@ class YoutubeClient:
             }
         )
 
-        max_attempts = 3  # matches your test expectations
-
+        max_attempts = 3
         for attempt in range(1, max_attempts + 1):
             try:
                 with YoutubeDL(options) as ydl:
                     ydl.download([youtube_url])
                 return
-
             except DownloadError as exc:
                 if attempt < max_attempts:
                     time.sleep(attempt * 5)
-                else:
-                    raise YoutubeDownloadError(str(exc)) from exc
+                    continue
 
+                message = str(exc)
+                if "Sign in to confirm you’re not a bot" in message and not self._settings_service.get_youtube_cookie_file_path():
+                    message = (
+                        f"{message} Configure YouTube cookies on the Settings page "
+                        f"and try again."
+                    )
+                raise YoutubeDownloadError(message) from exc
 
     def _build_common_options(self) -> dict:
         """Build yt-dlp options shared by metadata and download operations."""
-        return {
+        options = {
             "quiet": True,
             "noprogress": True,
             "skip_download": False,
@@ -105,33 +118,31 @@ class YoutubeClient:
             "throttledratelimit": self._parse_rate(self._settings.ytdlp_throttled_rate),
         }
 
+        cookie_file = self._settings_service.get_youtube_cookie_file_path()
+        if cookie_file:
+            options["cookiefile"] = cookie_file
+
+        return options
 
     def _find_video_path(self, work_dir: Path, output_name: str) -> Path:
         """Locate the final MKV after yt-dlp completes."""
         for candidate in work_dir.glob(f"{output_name}*.mkv"):
             self._filesystem_service.normalize_file(candidate)
             return candidate
-
         raise FileNotFoundError("Unable to locate downloaded MKV file.")
-
 
     def _build_retry_sleep(self, expr: str):
         """Build a yt-dlp retry sleep function from a simple config string."""
         if not expr:
             return None
-
         if expr.isdigit():
             seconds = float(expr)
             return lambda *_args, **_kwargs: seconds
-
         if expr.startswith("linear="):
             return self._build_linear_sleep(expr.removeprefix("linear="))
-
         if expr.startswith("exp="):
             return self._build_exp_sleep(expr.removeprefix("exp="))
-
         return None
-
 
     def _build_linear_sleep(self, payload: str):
         """Build a linear backoff retry sleep function."""
@@ -146,7 +157,6 @@ class YoutubeClient:
 
         return linear_sleep
 
-
     def _build_exp_sleep(self, payload: str):
         """Build an exponential backoff retry sleep function."""
         parts = payload.split(":")
@@ -160,16 +170,17 @@ class YoutubeClient:
 
         return exp_sleep
 
-
     def _parse_rate(self, value: str) -> int | None:
         """Parse a human-readable byte rate like 100K or 4M."""
         if not value:
             return None
 
         cleaned = value.strip().upper()
-        suffixes = {"K": 1024, "M": 1024 * 1024, "G": 1024 * 1024 * 1024}
-
+        suffixes = {
+            "K": 1024,
+            "M": 1024 * 1024,
+            "G": 1024 * 1024 * 1024,
+        }
         if cleaned[-1] in suffixes:
             return int(float(cleaned[:-1]) * suffixes[cleaned[-1]])
-
         return int(float(cleaned))

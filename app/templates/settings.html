@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Settings - YouTube Plex Importer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/site.css') }}">
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header">
+      <div>
+        <h1>Settings</h1>
+        <p class="page-subtitle">
+          Configure app-level behavior like YouTube authentication cookies for yt-dlp.
+        </p>
+      </div>
+
+      <nav class="page-nav">
+        <a class="nav-button" href="{{ url_for('ui.index') }}">Home</a>
+        <a class="nav-button" href="{{ url_for('ui.status_page') }}">Status</a>
+        <a class="nav-button is-active" href="{{ url_for('ui.settings_page') }}">Settings</a>
+      </nav>
+    </header>
+
+    {% if settings_result %}
+      <section class="result-card">
+        <h2>{{ "Saved" if settings_result.kind == "success" else "Error" }}</h2>
+        <p>{{ settings_result.message }}</p>
+      </section>
+    {% endif %}
+
+    <main class="content-stack">
+      <section class="panel">
+        <div class="helper-copy">
+          <p><strong>YouTube authentication</strong></p>
+          <p>
+            Save Netscape-format <code>cookies.txt</code> data here so yt-dlp can authenticate
+            against YouTube when it returns the “Sign in to confirm you’re not a bot” error.
+          </p>
+          <p>
+            Current status:
+            <strong>
+              {{ "Cookies configured" if auth_settings.cookies_configured else "No cookies configured" }}
+            </strong>
+          </p>
+          <p>Cookie file path: <code>{{ auth_settings.cookie_file_path }}</code></p>
+          {% if auth_settings.cookies_updated_at %}
+            <p>Last updated: {{ auth_settings.cookies_updated_at }}</p>
+          {% endif %}
+          <p>Saved cookie contents are never shown back in the UI after save.</p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>YouTube cookies</h2>
+
+        <form method="post" action="{{ url_for('ui.save_youtube_auth_settings') }}">
+          <div class="field field-full">
+            <label for="cookies_text">Paste cookies.txt data</label>
+            <textarea
+              id="cookies_text"
+              name="cookies_text"
+              rows="14"
+              placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	2147483647	VISITOR_INFO1_LIVE	example&#10;.youtube.com	TRUE	/	TRUE	2147483647	__Secure-1PSID	example"></textarea>
+          </div>
+
+          <div class="helper-copy">
+            <p>
+              Export cookies while signed into the YouTube account that can access the video.
+              The data must be in Netscape cookie format.
+            </p>
+          </div>
+
+          <div class="form-actions">
+            <button class="primary-button" type="submit">Save Cookies</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Clear saved cookies</h2>
+        <p class="page-subtitle">
+          Removes the saved server-side cookie file. Future yt-dlp calls will run without cookies
+          until you save them again.
+        </p>
+
+        <form method="post" action="{{ url_for('ui.clear_youtube_auth_settings') }}">
+          <div class="form-actions">
+            <button class="secondary-button" type="submit">Clear Cookies</button>
+          </div>
+        </form>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

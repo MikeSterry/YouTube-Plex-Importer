@@ -16,6 +16,7 @@ ui_blueprint = Blueprint("ui", __name__)
 
 INDEX_HTML = "index.html"
 STATUS_HTML = "status.html"
+SETTINGS_HTML = "settings.html"
 STATUS_GROUPS_PARTIAL = "_status_groups.html"
 JOB_CARD_PARTIAL = "_job_result_card.html"
 
@@ -34,6 +35,7 @@ def status_page():
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
     active_only, group = _status_filter_options(filter_name)
+
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
@@ -54,6 +56,7 @@ def status_fragment():
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
     active_only, group = _status_filter_options(filter_name)
+
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
@@ -86,6 +89,93 @@ def delete_job(job_id: str):
     container = current_app.config["APP_CONTAINER"]
     container.job_recovery_handler.delete_job(job_id)
     return redirect(url_for("ui.status_page", filter="issues"))
+
+
+@ui_blueprint.get("/settings")
+def settings_page():
+    """Render the settings page."""
+    container = current_app.config["APP_CONTAINER"]
+    auth_settings = container.settings_service.get_youtube_auth_settings()
+    return render_template(
+        SETTINGS_HTML,
+        auth_settings=auth_settings,
+        settings_result=None,
+    )
+
+
+@ui_blueprint.post("/settings/youtube-auth")
+def save_youtube_auth_settings():
+    """Persist YouTube cookie data from the settings page."""
+    container = current_app.config["APP_CONTAINER"]
+
+    try:
+        auth_settings = container.settings_service.save_youtube_cookie_text(
+            request.form.get("cookies_text", "")
+        )
+        return render_template(
+            SETTINGS_HTML,
+            auth_settings=auth_settings,
+            settings_result=_settings_result(
+                "success",
+                "YouTube cookie data was saved.",
+            ),
+        )
+    except ValueError as exc:
+        LOGGER.info("Settings validation failed: %s", exc)
+        auth_settings = container.settings_service.get_youtube_auth_settings()
+        return (
+            render_template(
+                SETTINGS_HTML,
+                auth_settings=auth_settings,
+                settings_result=_settings_result("error", str(exc)),
+            ),
+            400,
+        )
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Saving YouTube auth settings failed unexpectedly", exc_info=exc)
+        auth_settings = container.settings_service.get_youtube_auth_settings()
+        return (
+            render_template(
+                SETTINGS_HTML,
+                auth_settings=auth_settings,
+                settings_result=_settings_result(
+                    "error",
+                    "Something went wrong while saving the YouTube cookie data.",
+                ),
+            ),
+            500,
+        )
+
+
+@ui_blueprint.post("/settings/youtube-auth/clear")
+def clear_youtube_auth_settings():
+    """Remove persisted YouTube cookie data."""
+    container = current_app.config["APP_CONTAINER"]
+
+    try:
+        auth_settings = container.settings_service.clear_youtube_cookie_text()
+        return render_template(
+            SETTINGS_HTML,
+            auth_settings=auth_settings,
+            settings_result=_settings_result(
+                "success",
+                "Saved YouTube cookie data was cleared.",
+            ),
+        )
+    except Exception as exc:  # pragma: no cover
+        LOGGER.exception("Clearing YouTube auth settings failed unexpectedly", exc_info=exc)
+        auth_settings = container.settings_service.get_youtube_auth_settings()
+        return (
+            render_template(
+                SETTINGS_HTML,
+                auth_settings=auth_settings,
+                settings_result=_settings_result(
+                    "error",
+                    "Something went wrong while clearing the YouTube cookie data.",
+                ),
+            ),
+            500,
+        )
 
 
 @ui_blueprint.post("/create")
@@ -231,4 +321,12 @@ def _error_result(message: str) -> dict:
         "duration_display": "-",
         "error_message": message,
         "is_error": True,
+    }
+
+
+def _settings_result(kind: str, message: str) -> dict:
+    """Create a template-friendly settings status message."""
+    return {
+        "kind": kind,
+        "message": message,
     }

@@ -39,6 +39,7 @@ class Settings:
     ytdlp_retry_sleep_extractor: str
     ytdlp_http_chunk_size: int
     ytdlp_throttled_rate: str
+    youtube_cookie_file: str
 
     @staticmethod
     def load() -> "Settings":
@@ -74,6 +75,7 @@ class Settings:
             ytdlp_retry_sleep_extractor=os.getenv("YTDLP_RETRY_SLEEP_EXTRACTOR", "linear=1:10:2"),
             ytdlp_http_chunk_size=int(os.getenv("YTDLP_HTTP_CHUNK_SIZE", "10485760")),
             ytdlp_throttled_rate=os.getenv("YTDLP_THROTTLED_RATE", "100K"),
+            youtube_cookie_file=os.getenv("YOUTUBE_COOKIE_FILE", "/data/youtube_cookies.txt"),
         )
 
     @property
