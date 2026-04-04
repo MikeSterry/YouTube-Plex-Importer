@@ -12,6 +12,7 @@ from app.handlers.job_recovery_handler import JobRecoveryHandler
 from app.handlers.media_request_handler import MediaRequestHandler
 from app.repositories.job_repository import JobRepository
 from app.repositories.output_repository import OutputRepository
+from app.repositories.settings_repository import SettingsRepository
 from app.services.chapter_service import ChapterService
 from app.services.filesystem_service import FilesystemService
 from app.services.image_service import ImageService
@@ -19,6 +20,7 @@ from app.services.job_cleanup_service import JobCleanupService
 from app.services.job_service import JobService
 from app.services.media_service import MediaService
 from app.services.metadata_service import MetadataService
+from app.services.settings_service import SettingsService
 
 
 @dataclass
@@ -31,11 +33,13 @@ class AppContainer:
     job_recovery_handler: JobRecoveryHandler
     output_repository: OutputRepository
     image_service: ImageService
+    settings_service: SettingsService
 
 
 def build_container() -> AppContainer:
     """Create the full dependency container."""
     settings = Settings.load()
+
     redis_conn = Redis.from_url(settings.redis_url)
     queue = Queue(
         settings.queue_name,
@@ -45,8 +49,12 @@ def build_container() -> AppContainer:
 
     filesystem_service = FilesystemService(settings)
     http_client = HttpClient(timeout=60)
+
     output_repository = OutputRepository(settings, filesystem_service)
-    youtube_client = YoutubeClient(settings, filesystem_service)
+    settings_repository = SettingsRepository(settings, filesystem_service)
+    settings_service = SettingsService(settings_repository)
+
+    youtube_client = YoutubeClient(settings, filesystem_service, settings_service)
     chapter_service = ChapterService()
     image_service = ImageService(settings, filesystem_service, http_client)
     metadata_service = MetadataService(settings, filesystem_service)
@@ -74,4 +82,5 @@ def build_container() -> AppContainer:
         job_recovery_handler=job_recovery_handler,
         output_repository=output_repository,
         image_service=image_service,
+        settings_service=settings_service,
     )

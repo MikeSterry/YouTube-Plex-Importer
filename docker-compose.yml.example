@@ -9,6 +9,7 @@ services:
     volumes:
       - ./inprogress:/inprogress
       - ./output:/output
+      - ./data:/data
     depends_on:
       - redis
     command: >
@@ -34,6 +35,7 @@ services:
     volumes:
       - ./inprogress:/inprogress
       - ./output:/output
+      - ./data:/data
     depends_on:
       - redis
     command: ["python", "worker.py"]
