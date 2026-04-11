@@ -1,15 +1,14 @@
-# tests/clients/test_youtube_client.py
 from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from yt_dlp.utils import DownloadError
+from yt_dlp.utils import DownloadError, ExtractorError
 
 from app.clients import youtube_client as youtube_client_module
 from app.clients.youtube_client import YoutubeClient
-from app.exceptions import YoutubeDownloadError
+from app.exceptions import YoutubeDownloadError, YoutubeRateLimitError
 
 
 class DummyFilesystemService:
@@ -35,7 +34,7 @@ class FakeYoutubeDL:
 
     def __init__(self, options):
         self.options = options
-        FakeYoutubeDL.created_instances.append(self)
+        type(self).created_instances.append(self)
 
     def __enter__(self):
         return self
@@ -44,11 +43,11 @@ class FakeYoutubeDL:
         return False
 
     def extract_info(self, url, download=False):
-        return FakeYoutubeDL.extract_info_response
+        return type(self).extract_info_response
 
     def download(self, urls):
-        if FakeYoutubeDL.download_side_effects:
-            effect = FakeYoutubeDL.download_side_effects.pop(0)
+        if type(self).download_side_effects:
+            effect = type(self).download_side_effects.pop(0)
             if isinstance(effect, Exception):
                 raise effect
             if callable(effect):
@@ -97,37 +96,49 @@ def client(settings, filesystem_service, settings_service, monkeypatch):
 
 def test_build_output_name_uses_desired_output_name(client):
     info = {"title": "Ignored Title", "id": "abc123", "upload_date": "20260404"}
+
     result = client._build_output_name(info, "My Custom Name")
+
     assert result == "My Custom Name (2026)"
 
 
 def test_build_output_name_uses_title_when_desired_name_missing(client):
     info = {"title": "Test Title", "id": "abc123", "upload_date": "20260404"}
+
     result = client._build_output_name(info, None)
+
     assert result == "Test Title (2026)"
 
 
 def test_build_output_name_uses_id_when_title_missing(client):
     info = {"id": "abc123", "upload_date": "20260404"}
+
     result = client._build_output_name(info, None)
+
     assert result == "abc123 (2026)"
 
 
 def test_build_output_name_uses_video_when_title_and_id_missing(client):
     info = {"upload_date": "20260404"}
+
     result = client._build_output_name(info, None)
+
     assert result == "video (2026)"
 
 
 def test_build_output_name_skips_year_when_upload_date_missing(client):
     info = {"title": "Test Title", "id": "abc123"}
+
     result = client._build_output_name(info, None)
+
     assert result == "Test Title"
 
 
 def test_build_output_name_replaces_existing_trailing_year(client):
     info = {"title": "Ignored", "id": "abc123", "upload_date": "20260404"}
+
     result = client._build_output_name(info, "My Movie (1999)")
+
     assert result == "My Movie (2026)"
 
 
@@ -141,6 +152,7 @@ def test_extract_upload_year_returns_none_when_missing(client):
 
 def test_extract_info_uses_youtubedl_and_returns_metadata(client):
     result = client._extract_info("https://youtube.com/watch?v=abc123")
+
     assert result == {"title": "Test Title", "id": "abc123"}
     assert len(FakeYoutubeDL.created_instances) == 1
     assert FakeYoutubeDL.created_instances[0].options["quiet"] is True
@@ -149,6 +161,7 @@ def test_extract_info_uses_youtubedl_and_returns_metadata(client):
 
 def test_build_common_options_without_cookiefile(client):
     options = client._build_common_options()
+
     assert options["quiet"] is True
     assert options["noprogress"] is True
     assert options["skip_download"] is False
@@ -174,6 +187,7 @@ def test_build_common_options_with_cookiefile(settings, filesystem_service, monk
     client = YoutubeClient(settings, filesystem_service, settings_service)
 
     options = client._build_common_options()
+
     assert options["cookiefile"] == "/data/youtube_cookies.txt"
 
 
@@ -205,12 +219,14 @@ def test_build_retry_sleep_returns_none_for_empty_expression(client):
 
 def test_build_retry_sleep_with_fixed_seconds(client):
     sleep_fn = client._build_retry_sleep("5")
+
     assert sleep_fn(1) == 5.0
     assert sleep_fn(99) == 5.0
 
 
 def test_build_linear_sleep(client):
     sleep_fn = client._build_linear_sleep("1:5:2")
+
     assert sleep_fn(1) == 1.0
     assert sleep_fn(2) == 3.0
     assert sleep_fn(3) == 5.0
@@ -219,6 +235,7 @@ def test_build_linear_sleep(client):
 
 def test_build_exp_sleep(client):
     sleep_fn = client._build_exp_sleep("1:8:2")
+
     assert sleep_fn(1) == 1.0
     assert sleep_fn(2) == 2.0
     assert sleep_fn(3) == 4.0
@@ -387,3 +404,158 @@ def test_download_media_does_not_append_settings_hint_when_cookiefile_exists(
         exc_info.value
     )
     assert sleep_calls == [5, 10]
+
+
+def test_extract_info_raises_rate_limit_error_when_youtube_session_is_limited(
+    settings,
+    filesystem_service,
+    monkeypatch,
+):
+    class RateLimitedYoutubeDL(FakeYoutubeDL):
+        extract_info_response = {"title": "Test Title", "id": "abc123"}
+        download_side_effects = []
+        created_instances = []
+
+        def extract_info(self, url, download=False):
+            raise DownloadError(
+                "ERROR: [youtube] qreeSgvYH3M: Video unavailable. "
+                "This content isn't available, try again later. "
+                "The current session has been rate-limited by YouTube for up to an hour."
+            )
+
+    monkeypatch.setattr(youtube_client_module, "YoutubeDL", RateLimitedYoutubeDL)
+    client = YoutubeClient(settings, filesystem_service, DummySettingsService(None))
+
+    with pytest.raises(YoutubeRateLimitError) as exc_info:
+        client._extract_info("https://youtube.com/watch?v=qreeSgvYH3M")
+
+    assert "rate-limited" in str(exc_info.value).lower()
+
+
+def test_download_media_raises_rate_limit_error_without_retrying(
+    settings,
+    filesystem_service,
+    monkeypatch,
+    tmp_path,
+):
+    sleep_calls = []
+    monkeypatch.setattr(
+        youtube_client_module.time,
+        "sleep",
+        lambda seconds: sleep_calls.append(seconds),
+    )
+
+    monkeypatch.setattr(youtube_client_module, "YoutubeDL", FakeYoutubeDL)
+    FakeYoutubeDL.created_instances = []
+    FakeYoutubeDL.download_side_effects = [
+        DownloadError(
+            "ERROR: [youtube] qreeSgvYH3M: Video unavailable. "
+            "This content isn't available, try again later. "
+            "The current session has been rate-limited by YouTube for up to an hour."
+        ),
+    ]
+
+    client = YoutubeClient(settings, filesystem_service, DummySettingsService(None))
+
+    with pytest.raises(YoutubeRateLimitError) as exc_info:
+        client._download_media(
+            "https://youtube.com/watch?v=qreeSgvYH3M",
+            str(tmp_path / "Test Title.%(ext)s"),
+        )
+
+    assert "rate-limited" in str(exc_info.value).lower()
+    assert sleep_calls == []
+    assert len(FakeYoutubeDL.created_instances) == 1
+
+
+def test_download_media_raises_rate_limit_error_for_extractor_error_without_retrying(
+    settings,
+    filesystem_service,
+    monkeypatch,
+    tmp_path,
+):
+    sleep_calls = []
+    monkeypatch.setattr(
+        youtube_client_module.time,
+        "sleep",
+        lambda seconds: sleep_calls.append(seconds),
+    )
+
+    class RateLimitedYoutubeDL(FakeYoutubeDL):
+        extract_info_response = {"title": "Test Title", "id": "abc123"}
+        download_side_effects = []
+        created_instances = []
+
+        def download(self, urls):
+            raise ExtractorError(
+                "ERROR: [youtube] qreeSgvYH3M: Video unavailable. "
+                "This content isn't available, try again later. "
+                "The current session has been rate-limited by YouTube for up to an hour.",
+                expected=True,
+            )
+
+    monkeypatch.setattr(youtube_client_module, "YoutubeDL", RateLimitedYoutubeDL)
+
+    client = YoutubeClient(settings, filesystem_service, DummySettingsService(None))
+
+    with pytest.raises(YoutubeRateLimitError) as exc_info:
+        client._download_media(
+            "https://youtube.com/watch?v=qreeSgvYH3M",
+            str(tmp_path / "Test Title.%(ext)s"),
+        )
+
+    assert "rate-limited" in str(exc_info.value).lower()
+    assert sleep_calls == []
+    assert len(RateLimitedYoutubeDL.created_instances) == 1
+
+
+def test_download_media_still_retries_non_rate_limit_download_errors(
+    settings,
+    filesystem_service,
+    monkeypatch,
+    tmp_path,
+):
+    sleep_calls = []
+    monkeypatch.setattr(
+        youtube_client_module.time,
+        "sleep",
+        lambda seconds: sleep_calls.append(seconds),
+    )
+
+    monkeypatch.setattr(youtube_client_module, "YoutubeDL", FakeYoutubeDL)
+    FakeYoutubeDL.created_instances = []
+    FakeYoutubeDL.download_side_effects = [
+        DownloadError("temporary network failure"),
+        None,
+    ]
+
+    client = YoutubeClient(settings, filesystem_service, DummySettingsService(None))
+
+    client._download_media(
+        "https://youtube.com/watch?v=abc123",
+        str(tmp_path / "Test Title.%(ext)s"),
+    )
+
+    assert sleep_calls == [5]
+    assert len(FakeYoutubeDL.created_instances) == 2
+
+
+@pytest.mark.parametrize(
+    ("message", "expected"),
+    [
+        (
+            "This content isn't available, try again later. "
+            "The current session has been rate-limited by YouTube for up to an hour.",
+            True,
+        ),
+        (
+            "Try again later. The current session has been rate-limited by YouTube.",
+            True,
+        ),
+        ("Sign in to confirm you're not a bot", False),
+        ("temporary network failure", False),
+        ("", False),
+    ],
+)
+def test_is_rate_limited_message(message, expected):
+    assert youtube_client_module._is_rate_limited_message(message) is expected

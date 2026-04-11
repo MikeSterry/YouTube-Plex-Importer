@@ -111,3 +111,12 @@ class YoutubeDownloadError(AppError):
     status_code = HTTPStatus.BAD_REQUEST
     code = "youtube_download_error"
     message = "Failed to download media from YouTube."
+
+class YoutubeRateLimitError(YoutubeDownloadError):
+    """Raised when YouTube has rate-limited the current session."""
+
+    code = "youtube_rate_limited"
+    message = (
+        "YouTube rate-limited the current session. "
+        "Marking the job as failed and you can try again later..."
+    )
