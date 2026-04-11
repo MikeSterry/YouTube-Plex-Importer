@@ -1,3 +1,4 @@
+# tests/controllers/test_ui_controller.py
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -6,7 +7,7 @@ import pytest
 from flask import Flask
 
 from app.controllers.ui_controller import ui_blueprint
-from app.exceptions import ControllerRenderError
+from app.exceptions import ControllerRenderError, NotFoundError
 
 
 class DummyResponse:
@@ -92,9 +93,13 @@ class DummyJobService:
     def __init__(self):
         self.status_calls = []
         self.all_status_calls = []
+        self.raise_on_status = None
 
     def get_status(self, job_id):
         self.status_calls.append(job_id)
+        if self.raise_on_status:
+            raise self.raise_on_status
+
         return DummyResponse(
             job_id=job_id,
             status="Started",
@@ -136,63 +141,55 @@ def client(tmp_path):
 
     (templates_dir / "index.html").write_text(
         """
-        <!doctype html>
-        <html>
-          <body>
-            <h1>Index</h1>
-            {% if result %}
-              {% include "_job_result_card.html" %}
-            {% endif %}
-            <div id="outputs-count">{{ outputs|length }}</div>
-          </body>
-        </html>
-        """,
+# Index
+
+{% if result %} {% include "_job_result_card.html" %} {% endif %}
+
+<div id="outputs-count">{{ outputs|length }}</div>
+""",
         encoding="utf-8",
     )
 
     (templates_dir / "_job_result_card.html").write_text(
-        """
-        {% if result %}
-        <section class="job-card {{ 'job-card-error' if result.error_message else '' }}">
-          <h2>{{ 'Request Failed' if result.error_message else 'Job Submitted' }}</h2>
-          <div class="job-id">{{ result.job_id }}</div>
-          <div class="job-status">{{ result.status }}</div>
-          {% if result.error_message %}
-            <div class="job-error-banner">{{ result.error_message }}</div>
-          {% endif %}
-          <div class="job-output">{{ result.output_name }}</div>
-        </section>
-        {% endif %}
-        """,
+        """{% if result %}
+## {{ 'Request Failed' if result.error_message else 'Job Submitted' }}
+{{ result.job_id }}
+{{ result.status }}
+{% if result.error_message %}
+{{ result.error_message }}
+<div class="job-card-error"></div>
+{% endif %}
+{{ result.output_name }}
+{% endif %}""",
         encoding="utf-8",
     )
 
     (templates_dir / "status.html").write_text(
         """
-        <!doctype html>
-        <html>
-          <body>
-            <h1>Status</h1>
-            <div id="active-count">{{ active_count }}</div>
-            <div id="completed-count">{{ completed_count }}</div>
-            <div id="issue-count">{{ issue_count }}</div>
-            {% include "_status_groups.html" %}
-          </body>
-        </html>
-        """,
+# Status
+
+{{ active_count }}
+{{ completed_count }}
+{{ issue_count }}
+{% include "_status_groups.html" %}
+""",
         encoding="utf-8",
     )
 
     (templates_dir / "_status_groups.html").write_text(
+        """{% for group_name, jobs in job_groups.items() %}
+{% for job in jobs %}
+{{ job.job_id if job.job_id is defined else job['job_id'] }}
+{% endfor %}
+{% endfor %}""",
+        encoding="utf-8",
+    )
+
+    (templates_dir / "settings.html").write_text(
         """
-        {% for group_name, jobs in job_groups.items() %}
-          <section class="status-group" data-group="{{ group_name }}">
-            {% for job in jobs %}
-              <article class="status-job">{{ job.job_id if job.job_id is defined else job['job_id'] }}</article>
-            {% endfor %}
-          </section>
-        {% endfor %}
-        """,
+# Settings
+{{ settings_result.message if settings_result else '' }}
+""",
         encoding="utf-8",
     )
 
@@ -200,16 +197,21 @@ def client(tmp_path):
     output_repository = DummyOutputRepository()
     job_service = DummyJobService()
     job_recovery_handler = DummyJobRecoveryHandler()
+    settings_service = SimpleNamespace(
+        get_youtube_auth_settings=lambda: {},
+        save_youtube_cookie_text=lambda value: {},
+        clear_youtube_cookie_text=lambda: {},
+    )
 
     app.config["APP_CONTAINER"] = SimpleNamespace(
         request_handler=request_handler,
         output_repository=output_repository,
         job_service=job_service,
         job_recovery_handler=job_recovery_handler,
+        settings_service=settings_service,
     )
 
     app.register_blueprint(ui_blueprint)
-
     return app.test_client(), app.config["APP_CONTAINER"]
 
 
@@ -249,6 +251,7 @@ def test_status_fragment_renders_groups(client):
 
     assert response.status_code == 200
     assert container.job_service.all_status_calls[-1] == (False, "issues")
+
     html = response.get_data(as_text=True)
     assert "job-123" in html
 
@@ -260,10 +263,21 @@ def test_job_fragment_renders_single_job_card(client):
 
     assert response.status_code == 200
     assert container.job_service.status_calls == ["job-123"]
+
     html = response.get_data(as_text=True)
     assert "Job Submitted" in html
     assert "job-123" in html
     assert "Laid to Rest" in html
+
+
+def test_job_fragment_returns_404_when_job_is_missing(client):
+    test_client, container = client
+    container.job_service.raise_on_status = NotFoundError("Job job-404 was not found.")
+
+    response = test_client.get("/jobs/job-404/fragment")
+
+    assert response.status_code == 404
+    assert response.get_data(as_text=True) == ""
 
 
 def test_retry_job_redirects(client):
@@ -305,6 +319,7 @@ def test_create_form_success_renders_success_card(client):
 
     assert response.status_code == 200
     assert len(container.request_handler.create_calls) == 1
+
     html = response.get_data(as_text=True)
     assert "Job Submitted" in html
     assert "job-create-123" in html
@@ -314,10 +329,7 @@ def test_create_form_success_renders_success_card(client):
 @pytest.mark.parametrize(
     ("data", "expected_message"),
     [
-        (
-            {"youtube_url": ""},
-            "youtube_url is required",
-        ),
+        ({"youtube_url": ""}, "youtube_url is required"),
         (
             {
                 "youtube_url": "https://youtu.be/example",
@@ -335,6 +347,7 @@ def test_create_form_validation_errors_render_error_card(client, data, expected_
     response = test_client.post("/create", data=data)
 
     assert response.status_code == 400
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert "Failed" in html
@@ -352,6 +365,7 @@ def test_create_form_controller_render_error_renders_error_card(client):
     )
 
     assert response.status_code == 400
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert "Custom create failure" in html
@@ -367,6 +381,7 @@ def test_create_form_unhandled_error_renders_server_error_card(client):
     )
 
     assert response.status_code == 500
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert "Something went wrong while submitting the create request." in html
@@ -390,6 +405,7 @@ def test_update_form_success_renders_success_card(client):
 
     assert response.status_code == 200
     assert len(container.request_handler.update_calls) == 1
+
     html = response.get_data(as_text=True)
     assert "Job Submitted" in html
     assert "job-update-123" in html
@@ -399,10 +415,7 @@ def test_update_form_success_renders_success_card(client):
 @pytest.mark.parametrize(
     ("data", "expected_message"),
     [
-        (
-            {"output_name": ""},
-            "output_name is required",
-        ),
+        ({"output_name": ""}, "output_name is required"),
         (
             {
                 "output_name": "Laid to Rest",
@@ -420,6 +433,7 @@ def test_update_form_validation_errors_render_error_card(client, data, expected_
     response = test_client.post("/update", data=data)
 
     assert response.status_code == 400
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert expected_message in html
@@ -436,6 +450,7 @@ def test_update_form_controller_render_error_renders_error_card(client):
     )
 
     assert response.status_code == 400
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert "Custom update failure" in html
@@ -451,6 +466,7 @@ def test_update_form_unhandled_error_renders_server_error_card(client):
     )
 
     assert response.status_code == 500
+
     html = response.get_data(as_text=True)
     assert "Request Failed" in html
     assert "Something went wrong while submitting the update request." in html

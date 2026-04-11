@@ -1,12 +1,19 @@
+# app/controllers/ui_controller.py
 """UI routes."""
 
 from __future__ import annotations
 
 import logging
+from http import HTTPStatus
 
 from flask import Blueprint, current_app, redirect, render_template, request, url_for
 
-from app.exceptions import ControllerRenderError, InvalidFieldError, MissingFieldError
+from app.exceptions import (
+    ControllerRenderError,
+    InvalidFieldError,
+    MissingFieldError,
+    NotFoundError,
+)
 from app.models.domain import PosterCropSettings
 from app.models.requests import CreateMediaRequest, UpdateMediaRequest
 
@@ -35,7 +42,6 @@ def status_page():
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
     active_only, group = _status_filter_options(filter_name)
-
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
@@ -56,7 +62,6 @@ def status_fragment():
     container = current_app.config["APP_CONTAINER"]
     filter_name = (request.args.get("filter") or "active").strip().lower()
     active_only, group = _status_filter_options(filter_name)
-
     collection = container.job_service.get_all_statuses(
         active_only=active_only,
         group=group,
@@ -71,7 +76,11 @@ def status_fragment():
 def job_fragment(job_id: str):
     """Render a single job card for polling refresh."""
     container = current_app.config["APP_CONTAINER"]
-    result = container.job_service.get_status(job_id)
+    try:
+        result = container.job_service.get_status(job_id)
+    except NotFoundError:
+        return ("", HTTPStatus.NOT_FOUND)
+
     return render_template(JOB_CARD_PARTIAL, result=result.to_dict())
 
 
@@ -107,7 +116,6 @@ def settings_page():
 def save_youtube_auth_settings():
     """Persist YouTube cookie data from the settings page."""
     container = current_app.config["APP_CONTAINER"]
-
     try:
         auth_settings = container.settings_service.save_youtube_cookie_text(
             request.form.get("cookies_text", "")
@@ -151,7 +159,6 @@ def save_youtube_auth_settings():
 def clear_youtube_auth_settings():
     """Remove persisted YouTube cookie data."""
     container = current_app.config["APP_CONTAINER"]
-
     try:
         auth_settings = container.settings_service.clear_youtube_cookie_text()
         return render_template(

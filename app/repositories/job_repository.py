@@ -1,5 +1,9 @@
+# app/repositories/job_repository.py
 """Repository wrapper around the background queue."""
 
+from __future__ import annotations
+
+from rq.exceptions import NoSuchJobError
 from rq.job import Job
 from rq.registry import (
     DeferredJobRegistry,
@@ -8,6 +12,8 @@ from rq.registry import (
     ScheduledJobRegistry,
     StartedJobRegistry,
 )
+
+from app.exceptions import NotFoundError
 
 
 class JobRepository:
@@ -23,7 +29,10 @@ class JobRepository:
 
     def get_job(self, job_id: str):
         """Fetch a job by id from the current queue connection."""
-        return Job.fetch(job_id, connection=self._queue.connection)
+        try:
+            return Job.fetch(job_id, connection=self._queue.connection)
+        except NoSuchJobError as exc:
+            raise NotFoundError(f"Job {job_id} was not found.") from exc
 
     def get_all_jobs(self):
         """Return all known jobs across queue and registries."""
@@ -50,33 +59,4 @@ class JobRepository:
                 jobs.append(Job.fetch(job_id, connection=connection))
             except Exception:
                 continue
-
         return jobs
-
-    def delete_job(self, job_id: str) -> None:
-        """Remove a job from registries and delete its stored Redis record."""
-        connection = self._queue.connection
-
-        registries = [
-            StartedJobRegistry(queue=self._queue),
-            FinishedJobRegistry(queue=self._queue),
-            FailedJobRegistry(queue=self._queue),
-            DeferredJobRegistry(queue=self._queue),
-            ScheduledJobRegistry(queue=self._queue),
-        ]
-
-        for registry in registries:
-            try:
-                registry.remove(job_id, delete_job=False)
-            except Exception:
-                pass
-
-        try:
-            job = Job.fetch(job_id, connection=connection)
-        except Exception:
-            return
-
-        try:
-            job.delete()
-        except Exception:
-            pass
