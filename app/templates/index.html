@@ -168,24 +168,39 @@
       tabButtons.forEach((button) => {
         button.addEventListener("click", () => {
           const targetId = button.dataset.tabTarget;
-
           tabButtons.forEach((item) => item.classList.remove("is-active"));
           tabPanels.forEach((panel) => panel.classList.remove("is-active"));
-
           button.classList.add("is-active");
           document.getElementById(targetId)?.classList.add("is-active");
         });
       });
 
       const resultContainer = document.getElementById("job-result-container");
+
       if (resultContainer) {
         const jobId = resultContainer.dataset.jobId;
 
         if (jobId) {
           async function refreshJobCard() {
             try {
-              const response = await fetch(`/jobs/${jobId}/fragment`, { cache: "no-store" });
-              if (!response.ok) return;
+              const response = await fetch(`/jobs/${jobId}/fragment`, {
+                cache: "no-store"
+              });
+
+              if (response.status === 404 || response.status === 410) {
+                clearInterval(window.__jobCardPoller);
+                resultContainer.innerHTML = `
+                  <section class="job-result-card job-result-card-missing">
+                    <h2>Job No Longer Available</h2>
+                    <p>This job could not be found anymore, so live polling has stopped.</p>
+                  </section>
+                `;
+                return;
+              }
+
+              if (!response.ok) {
+                return;
+              }
 
               resultContainer.innerHTML = await response.text();
 
@@ -204,6 +219,9 @@
           window.__jobCardPoller = setInterval(refreshJobCard, 3000);
         }
       }
+
+      // keep the rest of the existing script below this unchanged
+    });
 
       document.querySelectorAll("[data-poster-editor]").forEach((editor) => {
         const sourceType = editor.querySelector("[data-poster-source-type]");

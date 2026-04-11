@@ -1,3 +1,4 @@
+# app/__init__.py
 """App factory and dependency wiring."""
 
 from __future__ import annotations
@@ -6,6 +7,7 @@ import logging
 import uuid
 
 from flask import Flask, g, jsonify, request
+from werkzeug.exceptions import HTTPException
 
 from app.config.container import build_container
 from app.config.logging_config import configure_logging
@@ -64,7 +66,7 @@ def _register_request_hooks(app: Flask) -> None:
 
 
 def _register_error_handlers(app: Flask) -> None:
-    """Register JSON error handlers for API routes."""
+    """Register error handlers."""
 
     @app.errorhandler(AppError)
     def handle_app_error(error: AppError):
@@ -73,6 +75,22 @@ def _register_error_handlers(app: Flask) -> None:
         if request.blueprint == "api":
             return jsonify(payload.to_dict()), payload.status_code
         raise error
+
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error: HTTPException):
+        """Return normal HTTP errors without treating them as unexpected 500s."""
+        if request.blueprint == "api":
+            return (
+                jsonify(
+                    {
+                        "error": error.description,
+                        "code": error.name.lower().replace(" ", "_"),
+                        "status_code": error.code,
+                    }
+                ),
+                error.code,
+            )
+        return error
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(error: Exception):
