@@ -1,6 +1,3 @@
-# app/clients/youtube_client.py
-"""YouTube download integration using yt-dlp."""
-
 from __future__ import annotations
 
 import re
@@ -8,21 +5,52 @@ import time
 from pathlib import Path
 
 from yt_dlp import YoutubeDL
-from yt_dlp.utils import DownloadError
+from yt_dlp.utils import DownloadError, ExtractorError
 
-from app.exceptions import YoutubeDownloadError
-from app.models.domain import DownloadResult
-from app.utils.file_utils import FileNameUtils
-from app.utils.logger_factory import get_logger
+from app.exceptions import YoutubeDownloadError, YoutubeRateLimitError
+from app.models.download_result import DownloadResult
 
-LOGGER = get_logger(__name__)
+
+_RATE_LIMIT_PATTERNS = (
+    "current session has been rate-limited by youtube",
+    "this content isn't available, try again later",
+    "try again later. the current session has been rate-limited",
+)
+
+
+def _is_rate_limited_message(message: str) -> bool:
+    normalized = (message or "").lower()
+    return any(pattern in normalized for pattern in _RATE_LIMIT_PATTERNS)
+
+
+def _raise_mapped_youtube_error(exc: Exception, settings_service) -> None:
+    message = str(exc)
+    normalized = message.lower()
+
+    if _is_rate_limited_message(message):
+        raise YoutubeRateLimitError(
+            "YouTube rate-limited the current session. "
+            "The job was stopped and left in Failed status. "
+            "Retry it manually later."
+        ) from exc
+
+    has_cookiefile = bool(settings_service.get_youtube_cookie_file_path())
+
+    if (
+        "sign in to confirm you’re not a bot" in normalized
+        or "sign in to confirm you're not a bot" in normalized
+    ):
+        if not has_cookiefile:
+            raise YoutubeDownloadError(
+                f"{message} Configure YouTube cookies on the Settings page and try again."
+            ) from exc
+        raise YoutubeDownloadError(message) from exc
+
+    raise YoutubeDownloadError(message) from exc
 
 
 class YoutubeClient:
-    """Client responsible for downloading YouTube content."""
-
-    def __init__(self, settings, filesystem_service, settings_service=None) -> None:
-        """Store collaborator dependencies."""
+    def __init__(self, settings, filesystem_service, settings_service) -> None:
         self._settings = settings
         self._filesystem_service = filesystem_service
         self._settings_service = settings_service
@@ -33,44 +61,33 @@ class YoutubeClient:
         work_dir: Path,
         desired_output_name: str | None = None,
     ) -> DownloadResult:
-        """Download the highest quality video/audio and mux it into MKV."""
-        LOGGER.info("Extracting YouTube metadata.")
         info = self._extract_info(youtube_url)
-
         output_name = self._build_output_name(info, desired_output_name)
-        target_template = str(work_dir / f"{output_name}.%(ext)s")
+        output_template = str(work_dir / f"{output_name}.%(ext)s")
 
-        LOGGER.info("Downloading YouTube media.", extra={"output_name": output_name})
-        self._download_media(youtube_url, target_template)
-
+        self._download_media(youtube_url, output_template)
         video_path = self._find_video_path(work_dir, output_name)
-        LOGGER.info("Located final MKV.", extra={"video_path": str(video_path)})
+
+        aux_files = [path for path in work_dir.iterdir() if path.is_file()]
 
         return DownloadResult(
-            title=info.get("title", output_name),
+            title=info.get("title") or "video",
             output_name=output_name,
             video_path=video_path,
-            aux_files=[path for path in work_dir.iterdir() if path.is_file()],
+            aux_files=aux_files,
         )
-
-    def _build_output_name(self, info: dict, desired_output_name: str | None) -> str:
-        """Choose a readable output base name for the downloaded media."""
-        if desired_output_name:
-            base_name = FileNameUtils.sanitize_display_name(desired_output_name)
-        else:
-            fallback_name = info.get("title") or info.get("id") or "video"
-            base_name = FileNameUtils.sanitize_display_name(fallback_name)
-
-        upload_year = self._extract_upload_year(info)
-        return self._apply_year_suffix(base_name, upload_year)
 
     def _extract_info(self, youtube_url: str) -> dict:
         """Read video metadata without downloading the file."""
-        with YoutubeDL(self._build_common_options()) as ydl:
-            return ydl.extract_info(youtube_url, download=False)
+        options = self._build_common_options()
+        try:
+            with YoutubeDL(options) as ydl:
+                return ydl.extract_info(youtube_url, download=False)
+        except (DownloadError, ExtractorError) as exc:
+            _raise_mapped_youtube_error(exc, self._settings_service)
 
     def _download_media(self, youtube_url: str, output_template: str) -> None:
-        """Download media with yt-dlp and retry transient failures."""
+        """Download media with retry handling."""
         options = self._build_common_options()
         options.update(
             {
@@ -81,28 +98,22 @@ class YoutubeClient:
         )
 
         max_attempts = 3
-
         for attempt in range(1, max_attempts + 1):
             try:
                 with YoutubeDL(options) as ydl:
                     ydl.download([youtube_url])
                 return
-            except DownloadError as exc:
+            except (DownloadError, ExtractorError) as exc:
+                if _is_rate_limited_message(str(exc)):
+                    _raise_mapped_youtube_error(exc, self._settings_service)
+
                 if attempt < max_attempts:
                     time.sleep(attempt * 5)
                     continue
 
-                message = str(exc)
-                if self._is_bot_challenge_error(message) and not self._get_cookiefile():
-                    message = (
-                        f"{message} "
-                        "Configure YouTube cookies on the Settings page and try again."
-                    )
-
-                raise YoutubeDownloadError(message) from exc
+                _raise_mapped_youtube_error(exc, self._settings_service)
 
     def _build_common_options(self) -> dict:
-        """Build yt-dlp options shared by metadata and download operations."""
         options = {
             "quiet": True,
             "noprogress": True,
@@ -114,127 +125,142 @@ class YoutubeClient:
             "fragment_retries": self._settings.ytdlp_fragment_retries,
             "file_access_retries": self._settings.ytdlp_file_access_retries,
             "extractor_retries": self._settings.ytdlp_extractor_retries,
-            "retry_sleep_functions": {
-                "http": self._build_retry_sleep(self._settings.ytdlp_retry_sleep_http),
-                "fragment": self._build_retry_sleep(
-                    self._settings.ytdlp_retry_sleep_fragment
-                ),
-                "file_access": self._build_retry_sleep(
-                    self._settings.ytdlp_retry_sleep_file_access
-                ),
-                "extractor": self._build_retry_sleep(
-                    self._settings.ytdlp_retry_sleep_extractor
-                ),
-            },
             "http_chunk_size": self._settings.ytdlp_http_chunk_size,
-            "throttledratelimit": self._parse_rate(self._settings.ytdlp_throttled_rate),
         }
 
-        cookiefile = self._get_cookiefile()
-        if cookiefile:
-            options["cookiefile"] = cookiefile
+        throttled_rate = self._parse_rate(self._settings.ytdlp_throttled_rate)
+        if throttled_rate is not None:
+            options["throttledratelimit"] = throttled_rate
+
+        retry_sleep_http = self._build_retry_sleep(self._settings.ytdlp_retry_sleep_http)
+        retry_sleep_fragment = self._build_retry_sleep(
+            self._settings.ytdlp_retry_sleep_fragment
+        )
+        retry_sleep_file_access = self._build_retry_sleep(
+            self._settings.ytdlp_retry_sleep_file_access
+        )
+        retry_sleep_extractor = self._build_retry_sleep(
+            self._settings.ytdlp_retry_sleep_extractor
+        )
+
+        retry_sleep = {}
+        if retry_sleep_http is not None:
+            retry_sleep["http"] = retry_sleep_http
+        if retry_sleep_fragment is not None:
+            retry_sleep["fragment"] = retry_sleep_fragment
+        if retry_sleep_file_access is not None:
+            retry_sleep["file_access"] = retry_sleep_file_access
+        if retry_sleep_extractor is not None:
+            retry_sleep["extractor"] = retry_sleep_extractor
+        if retry_sleep:
+            options["retry_sleep_functions"] = retry_sleep
+
+        cookie_file = self._settings_service.get_youtube_cookie_file_path()
+        if cookie_file:
+            options["cookiefile"] = cookie_file
 
         return options
 
-    def _find_video_path(self, work_dir: Path, output_name: str) -> Path:
-        """Locate the final MKV after yt-dlp completes."""
-        for candidate in work_dir.glob(f"{output_name}*.mkv"):
-            self._filesystem_service.normalize_file(candidate)
-            return candidate
-        raise FileNotFoundError("Unable to locate downloaded MKV file.")
+    def _build_output_name(
+        self, info: dict, desired_output_name: str | None = None
+    ) -> str:
+        base_name = (
+            (desired_output_name or "").strip()
+            or (info.get("title") or "").strip()
+            or (info.get("id") or "").strip()
+            or "video"
+        )
+
+        base_name = re.sub(r"\s*\(\d{4}\)\s*$", "", base_name).strip()
+
+        upload_year = self._extract_upload_year(info)
+        if upload_year:
+            return f"{base_name} ({upload_year})"
+
+        return base_name
 
     def _extract_upload_year(self, info: dict) -> str | None:
-        """Extract the year from yt-dlp upload_date metadata."""
-        upload_date = info.get("upload_date")
-        if not upload_date:
+        upload_date = (info or {}).get("upload_date")
+        if not upload_date or len(upload_date) < 4:
             return None
+        return str(upload_date)[:4]
 
-        cleaned = str(upload_date).strip()
-        match = re.match(r"^(\d{4})", cleaned)
-        if not match:
-            return None
+    def _find_video_path(self, work_dir: Path, output_name: str) -> Path:
+        expected_path = work_dir / f"{output_name}.mkv"
+        if expected_path.exists():
+            self._filesystem_service.normalize_file(expected_path)
+            return expected_path
 
-        return match.group(1)
+        for path in work_dir.glob("*.mkv"):
+            self._filesystem_service.normalize_file(path)
+            return path
 
-    def _apply_year_suffix(self, base_name: str, year: str | None) -> str:
-        """Append or replace a trailing ' (YYYY)' suffix on a filename stem."""
-        cleaned_base = re.sub(r"\s\(\d{4}\)$", "", base_name).rstrip()
-        if not year:
-            return cleaned_base
-        return f"{cleaned_base} ({year})"
-
-    def _get_cookiefile(self) -> str | None:
-        """Return the configured YouTube cookie file, if available."""
-        if self._settings_service is None:
-            return None
-
-        getter = getattr(self._settings_service, "get_youtube_cookie_file_path", None)
-        if getter is None:
-            return None
-
-        return getter()
-
-    def _is_bot_challenge_error(self, message: str) -> bool:
-        """Return True when yt-dlp reports YouTube's anti-bot sign-in challenge."""
-        normalized = message.lower()
-        return "sign in to confirm" in normalized and "not a bot" in normalized
-
-    def _build_retry_sleep(self, expr: str):
-        """Build a yt-dlp retry sleep function from a simple config string."""
-        if not expr:
-            return None
-
-        if expr.isdigit():
-            seconds = float(expr)
-            return lambda *_args, **_kwargs: seconds
-
-        if expr.startswith("linear="):
-            return self._build_linear_sleep(expr.removeprefix("linear="))
-
-        if expr.startswith("exp="):
-            return self._build_exp_sleep(expr.removeprefix("exp="))
-
-        return None
-
-    def _build_linear_sleep(self, payload: str):
-        """Build a linear backoff retry sleep function."""
-        parts = payload.split(":")
-        start = float(parts[0]) if len(parts) > 0 and parts[0] else 1.0
-        end = float(parts[1]) if len(parts) > 1 and parts[1] else start
-        step = float(parts[2]) if len(parts) > 2 and parts[2] else 1.0
-
-        def linear_sleep(attempt, *_args, **_kwargs):
-            value = start + max(attempt - 1, 0) * step
-            return min(value, end)
-
-        return linear_sleep
-
-    def _build_exp_sleep(self, payload: str):
-        """Build an exponential backoff retry sleep function."""
-        parts = payload.split(":")
-        start = float(parts[0]) if len(parts) > 0 and parts[0] else 1.0
-        end = float(parts[1]) if len(parts) > 1 and parts[1] else start
-        base = float(parts[2]) if len(parts) > 2 and parts[2] else 2.0
-
-        def exp_sleep(attempt, *_args, **_kwargs):
-            value = start * (base ** max(attempt - 1, 0))
-            return min(value, end)
-
-        return exp_sleep
+        raise FileNotFoundError("Unable to locate downloaded MKV file")
 
     def _parse_rate(self, value: str | None) -> int | None:
-        """Parse a human-readable byte rate like 100K or 4M."""
         if not value:
             return None
 
-        cleaned = value.strip().upper()
-        suffixes = {
-            "K": 1024,
-            "M": 1024 * 1024,
-            "G": 1024 * 1024 * 1024,
-        }
+        text = str(value).strip()
+        if not text:
+            return None
 
-        if cleaned[-1] in suffixes:
-            return int(float(cleaned[:-1]) * suffixes[cleaned[-1]])
+        match = re.fullmatch(r"(\d+)([KMG])?", text, re.IGNORECASE)
+        if not match:
+            raise ValueError(f"Invalid rate value: {value}")
 
-        return int(float(cleaned))
+        amount = int(match.group(1))
+        suffix = (match.group(2) or "").upper()
+
+        if suffix == "K":
+            return amount * 1024
+        if suffix == "M":
+            return amount * 1024 * 1024
+        if suffix == "G":
+            return amount * 1024 * 1024 * 1024
+        return amount
+
+    def _build_retry_sleep(self, expression: str | None):
+        if expression is None:
+            return None
+
+        text = str(expression).strip()
+        if not text:
+            return None
+
+        if text.startswith("linear="):
+            return self._build_linear_sleep(text.split("=", 1)[1])
+
+        if text.startswith("exp="):
+            return self._build_exp_sleep(text.split("=", 1)[1])
+
+        seconds = float(text)
+
+        def fixed_sleep(_attempt: int) -> float:
+            return seconds
+
+        return fixed_sleep
+
+    def _build_linear_sleep(self, spec: str):
+        start_text, stop_text, step_text = spec.split(":")
+        start = float(start_text)
+        stop = float(stop_text)
+        step = float(step_text)
+
+        def linear_sleep(attempt: int) -> float:
+            value = start + max(0, attempt - 1) * step
+            return min(value, stop)
+
+        return linear_sleep
+
+    def _build_exp_sleep(self, spec: str):
+        start_text, stop_text, base_text = spec.split(":")
+        start = float(start_text)
+        stop = float(stop_text)
+        base = float(base_text)
+
+        def exp_sleep(attempt: int) -> float:
+            value = start * (base ** max(0, attempt - 1))
+            return min(value, stop)
+
+        return exp_sleep

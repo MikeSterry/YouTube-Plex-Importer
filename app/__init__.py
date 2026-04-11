@@ -92,22 +92,21 @@ def _register_error_handlers(app: Flask) -> None:
             )
         return error
 
-    @app.errorhandler(Exception)
-    def handle_unexpected_error(error: Exception):
-        """Return a predictable JSON 500 response for unhandled API exceptions."""
-        LOGGER.exception("Unhandled application error", exc_info=error)
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(error: HTTPException):
+        """Return normal HTTP errors without treating them as unexpected 500s."""
         if request.blueprint == "api":
             return (
                 jsonify(
                     {
-                        "error": "An unexpected server error occurred.",
-                        "code": "internal_server_error",
-                        "status_code": 500,
+                        "error": error.description,
+                        "code": error.name.lower().replace(" ", "_"),
+                        "status_code": error.code,
                     }
                 ),
-                500,
+                error.code,
             )
-        raise error
+        return error.get_response()
 
 
 def _register_blueprints(app: Flask) -> None:
